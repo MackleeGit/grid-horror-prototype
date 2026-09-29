@@ -1,0 +1,59 @@
+**Project Concept Note: Echoes in the Dark**
+
+**1. Executive Summary**
+*Echoes in the Dark* is a 3D first-person survival horror game built from scratch using C++ and OpenGL 3.3+. The player is trapped inside a dark, single-story house consisting of four interconnected rooms and a central hallway. To escape, the player must explore the house, avoid an entity hunting them, collect 3 hidden fuse boxes, and unlock the front exit. The project serves as a practical demonstration of real-time 3D rendering pipelines, custom GLSL shader programming, procedural level generation from grid data, and basic CPU-bound game loop mechanics.
+
+---
+
+**2. Core Gameplay Mechanics & Win/Loss Conditions**
+
+* **Movement & Perspective:** Standard 3D First-Person View (`WASD` for translation, Mouse for camera orientation).
+* **The Flashlight:** The player’s primary light source is a flashlight attached to their camera view. The rest of the house remains in pitch darkness.
+* **Hiding:** Specific closet volumes exist in the map. Stepping inside and holding `E` toggles the player's hiding state, preventing the entity from detecting them.
+* **Win Condition:** Collect all 3 fuse items scattered in the house and interact with the main exit door.
+* **Loss Condition:** The entity comes within 1.5 units of the player while the player is unhidden, triggering a game-over sequence.
+
+---
+
+**3. Technical Architecture & OpenGL Implementation**
+
+**A. Map Generation (Grid Array to 3D Geometry)**
+Instead of loading complex 3D scene files, the house layout is defined as a 2D C++ array (where `1 = Wall`, `0 = Floor`, `H = Closet`, `F = Fuse`). At startup, the program loops through this grid and generates transformation matrices to render 3D textured wall cubes (`VBO`/`VAO`) and floor planes.
+
+**B. Camera & Transformations (GLM)**
+
+* **Projection Matrix:** Perspective projection matrix defining field of view (FOV) and aspect ratio.
+* **View Matrix:** Dynamically updated every frame using `glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp)`.
+* **Model Matrix:** Positions, rotates, and scales individual 3D objects (walls, fuses, entity mesh) in world space.
+
+**C. Lighting & Shaders (GLSL)**
+
+* **Vertex Shader:** Transforms vertex attributes from object space to clip space using `Projection * View * Model` matrices and passes surface normals and UV coordinates to the fragment stage.
+* **Fragment Shader:** Implements a custom **Spotlight Algorithm**. It calculates the angle between the player’s view direction vector and the vector pointing to each pixel on screen. If a pixel falls inside the inner cone angle, it receives full spotlight brightness; if outside, it drops to a dim ambient base (0.05). Light flickering is achieved by passing a variable float uniform (`flickerFactor`) from C++ to the shader based on the entity's proximity.
+
+**D. CPU Logic & Physics**
+
+* **Collision Detection:** Simple Axis-Aligned Bounding Box (AABB) checks evaluate player `(x, z)` coordinates against wall bounding boxes before updating the View Matrix position.
+* **Entity AI:** A basic pathing script calculates a direction vector `normalize(playerPos - entityPos)` every tick to move the monster toward the player when `isPlayerHidden == false`.
+
+---
+
+**4. Software Stack & Dependencies**
+
+* **Language:** C++17
+* **Graphics API:** OpenGL 3.3 (Core Profile)
+* **Windowing & Input:** GLFW
+* **OpenGL Function Loader:** GLAD
+* **Mathematics Library:** GLM (OpenGL Mathematics)
+* **Image Loading:** `stb_image.h` (for wall and floor textures)
+* **Build System:** CMake
+
+---
+
+**5. Implementation Roadmap for Agentic Development**
+
+* **Phase 1: Foundation** — Initialize GLFW window, load GLAD, set up main loop, configure GLM view matrices for FPS movement.
+* **Phase 2: Level Geometry** — Build cube mesh buffers (`VBO`/`VAO`), load textures with `stb_image`, and iterate through the 2D grid map array to render the house.
+* **Phase 3: Shaders & Lighting** — Write GLSL spotlight fragment shader for the flashlight and ambient lighting environment.
+* **Phase 4: Game Logic & Collisions** — Implement AABB wall collision checks, item collection (`Fuses`), and the closet hiding mechanic.
+* **Phase 5: Entity & State Loop** — Add entity mesh rendering, basic enemy chase AI, light flickering checks, and Win/Loss screen states.s

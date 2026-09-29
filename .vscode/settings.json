@@ -1,0 +1,8 @@
+{
+  "cmake.cmakePath": "C:/msys64/mingw64/bin/cmake.exe",
+  "cmake.generator": "Ninja",
+  "cmake.buildDirectory": "${workspaceFolder}/build",
+  "cmake.environment": {
+    "PATH": "C:/msys64/mingw64/bin;${env:PATH}"
+  }
+}

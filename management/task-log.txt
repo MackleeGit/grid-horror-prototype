@@ -1,0 +1,39 @@
+# Project Setup Log
+
+## 2026-09-10 11:13:38
+- Checked for required build tools. Found Git and GCC/G++. CMake was missing.
+- Rationale: CMake is needed to generate platform‑specific build files and manage dependencies.
+
+## 2026-09-10 11:25:30
+- Installed CMake via MSYS2 (`pacman -S mingw-w64-x86_64-cmake`).
+- Confirmed installation with `cmake --version` (4.2.3).
+- Rationale: Provides the build system for compiling the C++ source and linking libraries.
+
+## 2026-09-14 18:47:00
+- Corrected `cMakeLists.txt` casing to canonical `CMakeLists.txt` for cross-platform and IDE compliance.
+- Added `.vscode/settings.json` and `.vscode/cmake-kits.json` configured for MSYS2 MinGW-w64 and Ninja.
+- Verified build generation: `cmake -B build -G Ninja` and `cmake --build build`.
+- Rationale: Eliminates IDE configuration errors and locks in the deterministic MSYS2 GCC/Ninja toolchain.
+
+## 2026-09-14 19:15:00
+- Implemented Phase 1 (Foundation) complete camera & game loop systems in `src/main.cpp`:
+  - Added `framebuffer_size_callback` for dynamic viewport synchronization.
+  - Implemented Delta Time (`deltaTime`) for framerate-independent player motion.
+  - Configured GLFW cursor trapping (`GLFW_CURSOR_DISABLED`) and mouse movement callback (`mouse_callback`) using spherical trigonometric conversion (Yaw/Pitch to Cartesian unit direction vector).
+  - Added pitch constraining [-89, 89] degrees to prevent camera gimbal inversion.
+  - Implemented keyboard input processing (`processInput`) for WASD translation along camera front and strafe vectors.
+  - Implemented per-frame View Matrix calculation via `glm::lookAt`.
+  - Added comprehensive 3-question justification comment blocks for each new OpenGL/C++ concept.
+  - Added Minecraft-style F3 toggle to display real-time camera position (X, Y, Z), Yaw, Pitch, and FPS directly in the window title.
+  - Successfully compiled executable `build/EchoesInTheDark.exe` with Ninja.
+- Rationale: Satisfies Phase 1 deliverable ("A navigable black void. You can look around and move. Nothing else.") while providing zero-overhead real-time telemetry before introducing 3D geometry buffers.
+
+## Next Steps (planned)
+- Begin Phase 2: Level Geometry
+  - Download / vendor `stb_image.h` into `external/stb/`.
+  - Define vertex attribute layout for 3D textured cubes (Position, Normals, UVs).
+  - Scaffold VBO and VAO buffer generation and binding.
+  - Define the 2D house layout grid array (`1 = Wall, 0 = Floor`).
+  - Render basic untextured then textured cube geometry.
+
+

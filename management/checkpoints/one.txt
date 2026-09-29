@@ -1,0 +1,53 @@
+Purpose
+The first project activity is a short group project presentation in which you will introduce your proposed Computer Graphics project to the class. The purpose is to present your idea, establish its scope, and begin thinking about the Computer Graphics concepts and techniques that your project may require.
+
+Presentation Requirements
+Your presentation should address the following:
+1. Project Title
+Give your project a clear and relevant working title.
+
+2. Project Idea
+Briefly explain:
+What are you creating?
+What will the application do?
+What will the user be able to see or interact with?
+3. Purpose and target users 
+Explain the purpose of your application.
+What problem, activity, experience or need is your project intended to address?
+Who is the intended user or audience of your application?
+
+4. Scope
+Explain what you intend to implement during the semester.
+Identify the core features that your group considers essential to the project.
+You should also identify anything that is outside the scope of your project.
+Remember: A smaller project that is completed well is better than an overly ambitious project that remains incomplete.
+
+5. Graphics Components and Techniques 
+Identify the graphical elements you expect your application to contain. 
+Name examples of components (polygons, lines and elipses), techniques (color techniques, tranformations, animations etc) and algorithms
+
+You are not expected to use every technique taught in the course.
+
+6. Initial Design
+Provide a simple visual representation of your proposed application.
+This could be: a sketch, wireframe, interface mock-up, scene layout, 2D illustration, 3D concept or Flow diagram
+The design does not need to be polished. It is intended to communicate your initial vision.
+
+7. Initial Development Plan
+Briefly explain how your group intends to approach the project. Give an intended timeline of activities 
+
+This may change as the semester unfolds
+
+8. Group Members & Initial Responsibilities
+Briefly state the initial responsibilities of your group members. 
+A member may have more than one responsibility. Tasks should however be well distributed among yourselves
+Responsibilities may include areas such as:
+Graphics/algorithm implementation
+Interface/application development
+2D/3D modelling
+Animation
+Graphics effects
+Testing
+Documentation
+Integration
+Responsibilities may change throughout the semester as the project develops.
