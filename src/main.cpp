@@ -368,10 +368,17 @@ int main() {
         GLenum format = (nrChannels == 4) ? GL_RGBA : GL_RGB;
         glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
         glGenerateMipmap(GL_TEXTURE_2D);
+        stbi_image_free(data);
     } else {
-        std::cerr << "Failed to load texture" << std::endl;
+        // Fallback procedural solid texture (Dark Gray) if wall.png is absent
+        unsigned char fallbackPixels[] = {
+            128, 128, 128, 255,  160, 160, 160, 255,
+            160, 160, 160, 255,  128, 128, 128, 255
+        };
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 2, 2, 0, GL_RGBA, GL_UNSIGNED_BYTE, fallbackPixels);
+        glGenerateMipmap(GL_TEXTURE_2D);
     }
-    stbi_image_free(data);
+
 
     // Instantiate Software Minimap HUD (Pure C++ Algorithms Engine)
     MinimapHUD minimapHUD(200, 200);
