@@ -4,18 +4,12 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
+#include "../external/stb_image.h"
 
-// -----------------------------------------------------------------------------
-// [JUSTIFICATION: Screen Dimensions & Viewport Synchronization]
-// (a) What concept does this introduce?
-//     Window framebuffer dimension tracking and dynamic viewport mapping.
-// (b) Why is this the correct way to do it at this stage of the pipeline?
-//     OpenGL maps normalized device coordinates (NDC [-1, 1]) to screen space
-//     pixels via glViewport. Listening to resize events ensures coordinate integrity.
-// (c) What would break if omitted?
-//     Resizing or maximizing the window would freeze the rasterizer at the initial
-//     resolution, causing stretching, clipping, or incorrect aspect ratios.
-// -----------------------------------------------------------------------------
+// Pure C++ Graphics Algorithms & Minimap HUD Engine
+#include "algorithms/MinimapHUD.hpp"
+
+// Screen Dimensions & Viewport Synchronization
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
@@ -23,57 +17,22 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
 }
 
-// -----------------------------------------------------------------------------
-// [JUSTIFICATION: FPS Camera Representation via Vectors and Euler Angles]
-// (a) What concept does this introduce?
-//     A 3D First-Person View model using spherical coordinates (Yaw, Pitch)
-//     translated into Cartesian unit vectors via trigonometric projection.
-// (b) Why is this the correct way to do it at this stage of the pipeline?
-//     OpenGL has no camera object; a camera is mathematically a coordinate
-//     transformation matrix. Decoupling translation (cameraPos) from orientation
-//     (cameraFront computed from yaw/pitch) allows independent rotation and movement.
-// (c) What would break if omitted?
-//     Without Euler angles and directional vectors, the camera cannot look around
-//     smoothly in 3D space. Without pitch clamping, looking directly up or down
-//     causes the cross-product with world Up to invert, producing a disorienting screen flip.
-// -----------------------------------------------------------------------------
+// FPS Camera Representation
 glm::vec3 cameraPos   = glm::vec3(0.0f, 0.0f, 3.0f);
 glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
 glm::vec3 cameraUp    = glm::vec3(0.0f, 1.0f, 0.0f);
 
 bool firstMouse = true;
-float yaw   = -90.0f; // -90.0f points the camera along the negative Z-axis by default
+float yaw   = -90.0f;
 float pitch =  0.0f;
 float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
 
-// -----------------------------------------------------------------------------
-// [JUSTIFICATION: Delta Time & Framerate Independence]
-// (a) What concept does this introduce?
-//     Time-step delta measurement between rendering frames using the system clock.
-// (b) Why is this the correct way to do it at this stage of the pipeline?
-//     Graphics hardware and monitor refresh rates vary wildly across systems.
-//     Multiplying movement speed by deltaTime guarantees identical movement
-//     velocities regardless of whether the system runs at 30, 60, or 240 FPS.
-// (c) What would break if omitted?
-//     Player velocity would be locked directly to the hardware frame rate. The
-//     player would sprint uncontrollably on high-refresh-rate displays and crawl on slower ones.
-// -----------------------------------------------------------------------------
+// Delta Time
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
-// -----------------------------------------------------------------------------
-// [JUSTIFICATION: Mouse Cursor Callback & Spherical-to-Cartesian Math]
-// (a) What concept does this introduce?
-//     Relative mouse offset accumulation and Euler-angle spherical-to-Cartesian conversion.
-// (b) Why is this the correct way to do it at this stage of the pipeline?
-//     Raw absolute mouse coordinates are meaningless when the cursor is trapped;
-//     calculating frame-to-frame delta (xoffset, yoffset) scaled by sensitivity
-//     produces natural, fluid head rotation.
-// (c) What would break if omitted?
-//     The first mouse movement would calculate an offset against (0,0), causing a
-//     jarring camera snap. Without pitch clamping [-89, 89], the view would flip inverted.
-// -----------------------------------------------------------------------------
+// Mouse Callback
 void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
     float xpos = static_cast<float>(xposIn);
     float ypos = static_cast<float>(yposIn);
@@ -85,7 +44,7 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
     }
 
     float xoffset = xpos - lastX;
-    float yoffset = lastY - ypos; // Reversed since Y-coordinates range bottom-to-top
+    float yoffset = lastY - ypos; 
     lastX = xpos;
     lastY = ypos;
 
@@ -96,13 +55,11 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
     yaw   += xoffset;
     pitch += yoffset;
 
-    // Constrain pitch to avoid screen flipping (gimbal lock with world Up vector)
     if (pitch > 89.0f)
         pitch = 89.0f;
     if (pitch < -89.0f)
         pitch = -89.0f;
 
-    // Convert spherical Euler angles to Cartesian direction vector
     glm::vec3 direction;
     direction.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
     direction.y = sin(glm::radians(pitch));
@@ -110,39 +67,17 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
     cameraFront = glm::normalize(direction);
 }
 
-// -----------------------------------------------------------------------------
-// [JUSTIFICATION: Debug Telemetry & F3 Key Toggle]
-// (a) What concept does this introduce?
-//     Real-time application state inspection and debounced key toggle logic.
-// (b) Why is this the correct way to do it at this stage of the pipeline?
-//     Prior to rendering 3D geometry in Phase 2, visual verification of camera
-//     coordinates, orientation angles, and frame delta is essential.
-//     Updating the OS window title bar provides zero-overhead telemetry without
-//     requiring a full 2D text-rendering pipeline prematurely.
-// (c) What would break if omitted?
-//     The developer cannot verify that camera vectors and keyboard/mouse
-//     inputs are calculating properly in the Phase 1 black void.
-// -----------------------------------------------------------------------------
+// Debug Telemetry & HUD Toggle
 bool showDebugTelemetry = false;
+bool showMinimapHUD = true;
 bool f3PressedLastFrame  = false;
+bool f2PressedLastFrame  = false;
 
-// -----------------------------------------------------------------------------
-// [JUSTIFICATION: Keyboard Input Processing & Vector Strafe Movement]
-// (a) What concept does this introduce?
-//     Local-space translation along camera axes using vector cross products.
-// (b) Why is this the correct way to do it at this stage of the pipeline?
-//     Pressing 'W' and 'S' moves along the forward view vector (cameraFront).
-//     Pressing 'A' and 'D' moves perpendicular to the camera using the cross
-//     product normalize(cross(cameraFront, cameraUp)), enabling intuitive strafing.
-// (c) What would break if omitted?
-//     The player could only navigate along static global coordinate axes (e.g. world X/Z),
-//     meaning turning the mouse would not change what direction 'Forward' moves toward.
-// -----------------------------------------------------------------------------
+// Input Processing
 void processInput(GLFWwindow* window) {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
-    // Toggle debug telemetry with F3 (debounced)
     if (glfwGetKey(window, GLFW_KEY_F3) == GLFW_PRESS) {
         if (!f3PressedLastFrame) {
             showDebugTelemetry = !showDebugTelemetry;
@@ -153,6 +88,15 @@ void processInput(GLFWwindow* window) {
         }
     } else if (glfwGetKey(window, GLFW_KEY_F3) == GLFW_RELEASE) {
         f3PressedLastFrame = false;
+    }
+
+    if (glfwGetKey(window, GLFW_KEY_F2) == GLFW_PRESS) {
+        if (!f2PressedLastFrame) {
+            showMinimapHUD = !showMinimapHUD;
+            f2PressedLastFrame = true;
+        }
+    } else if (glfwGetKey(window, GLFW_KEY_F2) == GLFW_RELEASE) {
+        f2PressedLastFrame = false;
     }
 
     float cameraSpeed = 2.5f * deltaTime;
@@ -166,19 +110,27 @@ void processInput(GLFWwindow* window) {
         cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
 }
 
+// -----------------------------------------------------------------------------
+// Level Map Layout
+// 1 = Wall, 0 = Empty Space
+// -----------------------------------------------------------------------------
+const int MAP_WIDTH = 10;
+const int MAP_HEIGHT = 10;
+int levelMap[MAP_HEIGHT][MAP_WIDTH] = {
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 0, 0, 0, 1, 0, 0, 0, 0, 1},
+    {1, 0, 1, 0, 1, 0, 1, 1, 0, 1},
+    {1, 0, 1, 0, 0, 0, 0, 1, 0, 1},
+    {1, 0, 1, 1, 1, 1, 0, 1, 0, 1},
+    {1, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+    {1, 1, 1, 0, 1, 1, 1, 1, 0, 1},
+    {1, 0, 0, 0, 1, 0, 0, 0, 0, 1},
+    {1, 0, 1, 0, 0, 0, 1, 1, 0, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
+};
+
 int main() {
-    // -------------------------------------------------------------------------
-    // [JUSTIFICATION: GLFW Initialization & Core Profile Hints]
-    // (a) What concept does this introduce?
-    //     OS windowing abstraction and explicit OpenGL version targeting.
-    // (b) Why is this the correct way to do it at this stage of the pipeline?
-    //     Modern OpenGL (3.3+) deprecates fixed-function pipeline features (e.g.
-    //     glBegin/glEnd). Requesting CORE_PROFILE ensures legacy functions are
-    //     disabled so we only learn modern, shader-driven programmable pipeline practices.
-    // (c) What would break if omitted?
-    //     Drivers might fall back to a legacy compatibility context, allowing bad
-    //     habits or failing to expose modern GLSL features correctly.
-    // -------------------------------------------------------------------------
+    // GLFW Init & Core Profile
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW" << std::endl;
         return -1;
@@ -196,74 +148,313 @@ int main() {
     }
     glfwMakeContextCurrent(window);
 
-    // Register callbacks
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetCursorPosCallback(window, mouse_callback);
 
-    // Capture and hide the mouse cursor for first-person camera control
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
-    // -------------------------------------------------------------------------
-    // [JUSTIFICATION: GLAD Runtime Function Loader]
-    // (a) What concept does this introduce?
-    //     Dynamic linking of GPU driver function pointers at runtime.
-    // (b) Why is this the correct way to do it at this stage of the pipeline?
-    //     OpenGL is an API specification implemented by GPU driver vendors.
-    //     Function pointers must be queried dynamically at runtime per driver;
-    //     GLAD abstracts this mechanism cleanly.
-    // (c) What would break if omitted?
-    //     Any call to core OpenGL functions beyond OpenGL 1.1 (like glGenBuffers,
-    //     glUseProgram) would dereference null pointers and crash the application.
-    // -------------------------------------------------------------------------
+    // GLAD Runtime Loader
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
         std::cerr << "Failed to initialize GLAD" << std::endl;
         return -1;
     }
 
+    // Depth Testing
+    glEnable(GL_DEPTH_TEST);
+
     // -------------------------------------------------------------------------
-    // [JUSTIFICATION: The Main Render Loop & View Transformation Calculation]
-    // (a) What concept does this introduce?
-    //     The continuous frame execution cycle and real-time View Matrix calculation.
-    // (b) Why is this the correct way to do it at this stage of the pipeline?
-    //     Each frame queries input, updates delta time, clears buffers, computes
-    //     the view matrix with glm::lookAt, and prepares for geometry rendering.
-    // (c) What would break if omitted?
-    //     Without updating the View matrix per frame, camera movement would not
-    //     reflect on screen once 3D world geometry is added in Phase 2.
+    // 3D Scene Shader Pipeline
     // -------------------------------------------------------------------------
+    const char* vertexShaderSource = "#version 330 core\n"
+        "layout (location = 0) in vec3 aPos;\n"
+        "layout (location = 1) in vec2 aTexCoord;\n"
+        "out vec2 TexCoord;\n"
+        "uniform mat4 model;\n"
+        "uniform mat4 view;\n"
+        "uniform mat4 projection;\n"
+        "void main()\n"
+        "{\n"
+        "   gl_Position = projection * view * model * vec4(aPos, 1.0);\n"
+        "   TexCoord = aTexCoord;\n"
+        "}\0";
+    
+    const char* fragmentShaderSource = "#version 330 core\n"
+        "out vec4 FragColor;\n"
+        "in vec2 TexCoord;\n"
+        "uniform sampler2D texture1;\n"
+        "void main()\n"
+        "{\n"
+        "   FragColor = texture(texture1, TexCoord);\n"
+        "}\n\0";
+
+    unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+    glCompileShader(vertexShader);
+
+    unsigned int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+    glCompileShader(fragmentShader);
+
+    unsigned int shaderProgram = glCreateProgram();
+    glAttachShader(shaderProgram, vertexShader);
+    glAttachShader(shaderProgram, fragmentShader);
+    glLinkProgram(shaderProgram);
+
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
+
+    // -------------------------------------------------------------------------
+    // 2D HUD Shader Pipeline (for Pure C++ Minimap Software Overlay)
+    // -------------------------------------------------------------------------
+    const char* hudVertexShaderSource = "#version 330 core\n"
+        "layout (location = 0) in vec2 aPos;\n"
+        "layout (location = 1) in vec2 aTexCoord;\n"
+        "out vec2 TexCoord;\n"
+        "void main()\n"
+        "{\n"
+        "   gl_Position = vec4(aPos, 0.0, 1.0);\n"
+        "   TexCoord = aTexCoord;\n"
+        "}\0";
+
+    const char* hudFragmentShaderSource = "#version 330 core\n"
+        "out vec4 FragColor;\n"
+        "in vec2 TexCoord;\n"
+        "uniform sampler2D hudTexture;\n"
+        "void main()\n"
+        "{\n"
+        "   FragColor = texture(hudTexture, TexCoord);\n"
+        "}\n\0";
+
+    unsigned int hudVertexShader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(hudVertexShader, 1, &hudVertexShaderSource, NULL);
+    glCompileShader(hudVertexShader);
+
+    unsigned int hudFragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(hudFragmentShader, 1, &hudFragmentShaderSource, NULL);
+    glCompileShader(hudFragmentShader);
+
+    unsigned int hudShaderProgram = glCreateProgram();
+    glAttachShader(hudShaderProgram, hudVertexShader);
+    glAttachShader(hudShaderProgram, hudFragmentShader);
+    glLinkProgram(hudShaderProgram);
+
+    glDeleteShader(hudVertexShader);
+    glDeleteShader(hudFragmentShader);
+
+    // -------------------------------------------------------------------------
+    // 3D Geometry Setup (Wall Cubes & Floor Quad)
+    // -------------------------------------------------------------------------
+    float vertices[] = {
+        // positions          // texture coords
+        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
+         0.5f, -0.5f, -0.5f,  1.0f, 0.0f,
+         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+        -0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
+        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
+
+        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+         0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
+         0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
+         0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
+        -0.5f,  0.5f,  0.5f,  0.0f, 1.0f,
+        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+
+        -0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+        -0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+        -0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+
+         0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+         0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+         0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+         0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+         0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+
+        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+         0.5f, -0.5f, -0.5f,  1.0f, 1.0f,
+         0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
+         0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
+        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+
+        -0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
+         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+         0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+         0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+        -0.5f,  0.5f,  0.5f,  0.0f, 0.0f,
+        -0.5f,  0.5f, -0.5f,  0.0f, 1.0f
+    };
+
+    unsigned int VBO, VAO;
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+    glBindVertexArray(VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    // Floor Geometry (EBO)
+    float floorVertices[] = {
+        -5.0f, -0.5f, -5.0f,    0.0f,  10.0f,
+         5.0f, -0.5f, -5.0f,   10.0f,  10.0f,
+         5.0f, -0.5f,  5.0f,   10.0f,   0.0f,
+        -5.0f, -0.5f,  5.0f,    0.0f,   0.0f
+    };
+    unsigned int floorIndices[] = { 0, 1, 2, 2, 3, 0 };
+
+    unsigned int floorVAO, floorVBO, floorEBO;
+    glGenVertexArrays(1, &floorVAO);
+    glGenBuffers(1, &floorVBO);
+    glGenBuffers(1, &floorEBO);
+
+    glBindVertexArray(floorVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, floorVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(floorVertices), floorVertices, GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, floorEBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(floorIndices), floorIndices, GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    // -------------------------------------------------------------------------
+    // 2D HUD Quad Geometry Setup (Top-Right Screen Overlay)
+    // -------------------------------------------------------------------------
+    float hudQuadVertices[] = {
+        // positions   // texture coords (V inverted for OpenGL texture alignment)
+        0.45f,  0.95f,  0.0f, 0.0f,
+        0.95f,  0.95f,  1.0f, 0.0f,
+        0.95f,  0.45f,  1.0f, 1.0f,
+
+        0.45f,  0.95f,  0.0f, 0.0f,
+        0.95f,  0.45f,  1.0f, 1.0f,
+        0.45f,  0.45f,  0.0f, 1.0f
+    };
+
+    unsigned int hudVAO, hudVBO;
+    glGenVertexArrays(1, &hudVAO);
+    glGenBuffers(1, &hudVBO);
+    glBindVertexArray(hudVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, hudVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(hudQuadVertices), hudQuadVertices, GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    // Load Wall Texture
+    unsigned int texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    
+    stbi_set_flip_vertically_on_load(true);
+    int width, height, nrChannels;
+    unsigned char *data = stbi_load("assets/textures/wall.png", &width, &height, &nrChannels, 0);
+    if (data) {
+        GLenum format = (nrChannels == 4) ? GL_RGBA : GL_RGB;
+        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+    } else {
+        std::cerr << "Failed to load texture" << std::endl;
+    }
+    stbi_image_free(data);
+
+    // Instantiate Software Minimap HUD (Pure C++ Algorithms Engine)
+    MinimapHUD minimapHUD(200, 200);
+
+    // Main Render Loop
     while (!glfwWindowShouldClose(window)) {
-        // Calculate per-frame delta time
         float currentFrame = static_cast<float>(glfwGetTime());
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
 
-        // Process keyboard input
         processInput(window);
 
-        // Clear screen to black void (Phase 1 deliverable)
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // Compute the View Matrix from the current camera state
-        // (In Phase 2 & 3, this view matrix will be passed to GLSL shaders)
+        // 1. Render 3D Scene Geometry
+        glEnable(GL_DEPTH_TEST);
+        glUseProgram(shaderProgram);
+
         glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+        glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
 
-        // Update F3 debug telemetry in window title if toggled on
+        int modelLoc = glGetUniformLocation(shaderProgram, "model");
+        int viewLoc = glGetUniformLocation(shaderProgram, "view");
+        int projLoc = glGetUniformLocation(shaderProgram, "projection");
+
+        glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+        glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, texture);
+
+        // Draw Floor
+        glBindVertexArray(floorVAO);
+        glm::mat4 floorModel = glm::mat4(1.0f);
+        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(floorModel));
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+        // Draw Walls
+        glBindVertexArray(VAO);
+        for (int z = 0; z < MAP_HEIGHT; z++) {
+            for (int x = 0; x < MAP_WIDTH; x++) {
+                if (levelMap[z][x] == 1) {
+                    glm::mat4 wallModel = glm::mat4(1.0f);
+                    float posX = (float)x - 5.0f;
+                    float posZ = (float)z - 5.0f;
+                    wallModel = glm::translate(wallModel, glm::vec3(posX, 0.0f, posZ));
+                    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(wallModel));
+                    glDrawArrays(GL_TRIANGLES, 0, 36);
+                }
+            }
+        }
+
+        // 2. Render 2D Pure C++ Software Minimap HUD Overlay
+        if (showMinimapHUD) {
+            // Render CPU pixel buffer using Pure C++ graphics algorithms
+            minimapHUD.render(cameraPos.x, cameraPos.z, yaw, currentFrame, levelMap, MAP_WIDTH, MAP_HEIGHT);
+
+            // Render HUD Quad on top of 3D view (disable depth testing)
+            glDisable(GL_DEPTH_TEST);
+            glUseProgram(hudShaderProgram);
+
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, minimapHUD.canvas.textureID);
+            glUniform1i(glGetUniformLocation(hudShaderProgram, "hudTexture"), 0);
+
+            glBindVertexArray(hudVAO);
+            glDrawArrays(GL_TRIANGLES, 0, 6);
+        }
+
         if (showDebugTelemetry) {
             char title[128];
             int fps = (deltaTime > 0.0f) ? static_cast<int>(1.0f / deltaTime) : 0;
             snprintf(title, sizeof(title),
-                     "Echoes in the Dark [DEBUG F3] | Pos: (%.2f, %.2f, %.2f) | Yaw: %.1f Pitch: %.1f | FPS: %d",
-                     cameraPos.x, cameraPos.y, cameraPos.z, yaw, pitch, fps);
+                     "Echoes in the Dark [F2 HUD | F3 Debug] | Pos: (%.2f, %.2f, %.2f) | Yaw: %.1f | FPS: %d",
+                     cameraPos.x, cameraPos.y, cameraPos.z, yaw, fps);
             glfwSetWindowTitle(window, title);
         }
 
-        // Swap buffers and poll OS events
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
-    // Cleanup resources before termination
     glfwDestroyWindow(window);
     glfwTerminate();
     return 0;
