@@ -4,6 +4,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
+#include "cp1Geometry.h" // Amy: CP1 pure C++ geometry (floor plan + wall wireframe)
 
 // -----------------------------------------------------------------------------
 // [JUSTIFICATION: Screen Dimensions & Viewport Synchronization]
@@ -179,6 +180,9 @@ int main() {
     //     Drivers might fall back to a legacy compatibility context, allowing bad
     //     habits or failing to expose modern GLSL features correctly.
     // -------------------------------------------------------------------------
+
+    cp1::runGeometryDemo();
+    
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW" << std::endl;
         return -1;
