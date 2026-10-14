@@ -5,6 +5,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 #include "../external/stb_image.h"
+#include "Shader.hpp"
 
 // Pure C++ Graphics Algorithms & Minimap HUD Engine
 #include "algorithms/MinimapHUD.hpp"
@@ -163,83 +164,10 @@ int main() {
     glEnable(GL_DEPTH_TEST);
 
     // -------------------------------------------------------------------------
-    // 3D Scene Shader Pipeline
+    // Shader Pipelines (Loaded from external GLSL files)
     // -------------------------------------------------------------------------
-    const char* vertexShaderSource = "#version 330 core\n"
-        "layout (location = 0) in vec3 aPos;\n"
-        "layout (location = 1) in vec2 aTexCoord;\n"
-        "out vec2 TexCoord;\n"
-        "uniform mat4 model;\n"
-        "uniform mat4 view;\n"
-        "uniform mat4 projection;\n"
-        "void main()\n"
-        "{\n"
-        "   gl_Position = projection * view * model * vec4(aPos, 1.0);\n"
-        "   TexCoord = aTexCoord;\n"
-        "}\0";
-    
-    const char* fragmentShaderSource = "#version 330 core\n"
-        "out vec4 FragColor;\n"
-        "in vec2 TexCoord;\n"
-        "uniform sampler2D texture1;\n"
-        "void main()\n"
-        "{\n"
-        "   FragColor = texture(texture1, TexCoord);\n"
-        "}\n\0";
-
-    unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
-    glCompileShader(vertexShader);
-
-    unsigned int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
-    glCompileShader(fragmentShader);
-
-    unsigned int shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragmentShader);
-    glLinkProgram(shaderProgram);
-
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
-
-    // -------------------------------------------------------------------------
-    // 2D HUD Shader Pipeline (for Pure C++ Minimap Software Overlay)
-    // -------------------------------------------------------------------------
-    const char* hudVertexShaderSource = "#version 330 core\n"
-        "layout (location = 0) in vec2 aPos;\n"
-        "layout (location = 1) in vec2 aTexCoord;\n"
-        "out vec2 TexCoord;\n"
-        "void main()\n"
-        "{\n"
-        "   gl_Position = vec4(aPos, 0.0, 1.0);\n"
-        "   TexCoord = aTexCoord;\n"
-        "}\0";
-
-    const char* hudFragmentShaderSource = "#version 330 core\n"
-        "out vec4 FragColor;\n"
-        "in vec2 TexCoord;\n"
-        "uniform sampler2D hudTexture;\n"
-        "void main()\n"
-        "{\n"
-        "   FragColor = texture(hudTexture, TexCoord);\n"
-        "}\n\0";
-
-    unsigned int hudVertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(hudVertexShader, 1, &hudVertexShaderSource, NULL);
-    glCompileShader(hudVertexShader);
-
-    unsigned int hudFragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(hudFragmentShader, 1, &hudFragmentShaderSource, NULL);
-    glCompileShader(hudFragmentShader);
-
-    unsigned int hudShaderProgram = glCreateProgram();
-    glAttachShader(hudShaderProgram, hudVertexShader);
-    glAttachShader(hudShaderProgram, hudFragmentShader);
-    glLinkProgram(hudShaderProgram);
-
-    glDeleteShader(hudVertexShader);
-    glDeleteShader(hudFragmentShader);
+    Shader sceneShader("shaders/scene.vert", "shaders/scene.frag");
+    Shader hudShader("shaders/hud.vert", "shaders/hud.frag");
 
     // -------------------------------------------------------------------------
     // 3D Geometry Setup (Wall Cubes & Floor Quad)
@@ -352,33 +280,89 @@ int main() {
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
-    // Load Wall Texture
-    unsigned int texture;
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
+    // -------------------------------------------------------------------------
+    // Load / Generate Textures (Wall vs Floor)
+    // -------------------------------------------------------------------------
+    stbi_set_flip_vertically_on_load(true);
+    int width, height, nrChannels;
+
+    // 1. Wall Texture
+    unsigned int wallTexture;
+    glGenTextures(1, &wallTexture);
+    glBindTexture(GL_TEXTURE_2D, wallTexture);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    
-    stbi_set_flip_vertically_on_load(true);
-    int width, height, nrChannels;
-    unsigned char *data = stbi_load("assets/textures/wall.png", &width, &height, &nrChannels, 0);
-    if (data) {
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    unsigned char *wallData = stbi_load("assets/textures/wall.png", &width, &height, &nrChannels, 0);
+    if (wallData) {
         GLenum format = (nrChannels == 4) ? GL_RGBA : GL_RGB;
-        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, wallData);
         glGenerateMipmap(GL_TEXTURE_2D);
-        stbi_image_free(data);
+        stbi_image_free(wallData);
     } else {
-        // Fallback procedural solid texture (Dark Gray) if wall.png is absent
-        unsigned char fallbackPixels[] = {
-            128, 128, 128, 255,  160, 160, 160, 255,
-            160, 160, 160, 255,  128, 128, 128, 255
-        };
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 2, 2, 0, GL_RGBA, GL_UNSIGNED_BYTE, fallbackPixels);
+        // Procedural Dark Brick Wall Texture (16x16 pixels)
+        unsigned char brickPixels[16 * 16 * 4];
+        for (int y = 0; y < 16; ++y) {
+            for (int x = 0; x < 16; ++x) {
+                int index = (y * 16 + x) * 4;
+                bool isMortar = (y % 4 == 0) || ((y / 4) % 2 == 0 ? (x % 8 == 0) : ((x + 4) % 8 == 0));
+                if (isMortar) {
+                    brickPixels[index + 0] = 40;  // Dark mortar R
+                    brickPixels[index + 1] = 42;  // G
+                    brickPixels[index + 2] = 45;  // B
+                    brickPixels[index + 3] = 255;
+                } else {
+                    brickPixels[index + 0] = 95;  // Aged dark brick R
+                    brickPixels[index + 1] = 55;  // G
+                    brickPixels[index + 2] = 50;  // B
+                    brickPixels[index + 3] = 255;
+                }
+            }
+        }
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 16, 16, 0, GL_RGBA, GL_UNSIGNED_BYTE, brickPixels);
         glGenerateMipmap(GL_TEXTURE_2D);
     }
 
+    // 2. Floor Texture
+    unsigned int floorTexture;
+    glGenTextures(1, &floorTexture);
+    glBindTexture(GL_TEXTURE_2D, floorTexture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    unsigned char *floorData = stbi_load("assets/textures/floor.png", &width, &height, &nrChannels, 0);
+    if (floorData) {
+        GLenum format = (nrChannels == 4) ? GL_RGBA : GL_RGB;
+        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, floorData);
+        glGenerateMipmap(GL_TEXTURE_2D);
+        stbi_image_free(floorData);
+    } else {
+        // Procedural Dark Stone Tile Floor Texture (16x16 pixels)
+        unsigned char tilePixels[16 * 16 * 4];
+        for (int y = 0; y < 16; ++y) {
+            for (int x = 0; x < 16; ++x) {
+                int index = (y * 16 + x) * 4;
+                bool isGrout = (x % 8 == 0) || (y % 8 == 0);
+                if (isGrout) {
+                    tilePixels[index + 0] = 20;  // Dark tile grout R
+                    tilePixels[index + 1] = 22;  // G
+                    tilePixels[index + 2] = 25;  // B
+                    tilePixels[index + 3] = 255;
+                } else {
+                    tilePixels[index + 0] = 50;  // Dark stone floor R
+                    tilePixels[index + 1] = 60;  // G
+                    tilePixels[index + 2] = 70;  // B
+                    tilePixels[index + 3] = 255;
+                }
+            }
+        }
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 16, 16, 0, GL_RGBA, GL_UNSIGNED_BYTE, tilePixels);
+        glGenerateMipmap(GL_TEXTURE_2D);
+    }
 
     // Instantiate Software Minimap HUD (Pure C++ Algorithms Engine)
     MinimapHUD minimapHUD(200, 200);
@@ -396,28 +380,28 @@ int main() {
 
         // 1. Render 3D Scene Geometry
         glEnable(GL_DEPTH_TEST);
-        glUseProgram(shaderProgram);
+        sceneShader.use();
 
         glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
         glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
 
-        int modelLoc = glGetUniformLocation(shaderProgram, "model");
-        int viewLoc = glGetUniformLocation(shaderProgram, "view");
-        int projLoc = glGetUniformLocation(shaderProgram, "projection");
+        int modelLoc = glGetUniformLocation(sceneShader.ID, "model");
+        int viewLoc = glGetUniformLocation(sceneShader.ID, "view");
+        int projLoc = glGetUniformLocation(sceneShader.ID, "projection");
 
         glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
 
+        // Draw Floor with Floor Texture
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, texture);
-
-        // Draw Floor
+        glBindTexture(GL_TEXTURE_2D, floorTexture);
         glBindVertexArray(floorVAO);
         glm::mat4 floorModel = glm::mat4(1.0f);
         glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(floorModel));
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
-        // Draw Walls
+        // Draw Walls with Wall Texture
+        glBindTexture(GL_TEXTURE_2D, wallTexture);
         glBindVertexArray(VAO);
         for (int z = 0; z < MAP_HEIGHT; z++) {
             for (int x = 0; x < MAP_WIDTH; x++) {
@@ -439,11 +423,11 @@ int main() {
 
             // Render HUD Quad on top of 3D view (disable depth testing)
             glDisable(GL_DEPTH_TEST);
-            glUseProgram(hudShaderProgram);
+            hudShader.use();
 
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, minimapHUD.canvas.textureID);
-            glUniform1i(glGetUniformLocation(hudShaderProgram, "hudTexture"), 0);
+            glUniform1i(glGetUniformLocation(hudShader.ID, "hudTexture"), 0);
 
             glBindVertexArray(hudVAO);
             glDrawArrays(GL_TRIANGLES, 0, 6);
