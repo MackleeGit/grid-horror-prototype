@@ -4,26 +4,8 @@
 #include "SoftwareCanvas.hpp"
 #include "LineDrawing.hpp"
 
-/*
-================================================================================
-PURE C++ COHEN-SUTHERLAND LINE CLIPPING ALGORITHM
-================================================================================
-(a) What concept does this introduce?
-    Cohen-Sutherland Line Clipping — divides 2D clipping space into nine 9-regions 
-    using 4-bit outcodes (INSIDE, LEFT, RIGHT, BOTTOM, TOP) to quickly identify 
-    trivially accepted/rejected line segments and calculate intersection points.
-
-(b) Why is this the correct way to do it at this stage?
-    Drawing primitive lines beyond view viewport/HUD bounds causes pixel overflow 
-    or wasteful rasterization. Cohen-Sutherland performs bitwise outcode tests for 
-    O(1) trivial rejection before executing line intersection division math.
-
-(c) What would break if skipped?
-    Lines drawn on the HUD (such as raycast sightlines extending outside the 
-    minimap window) would spill over into the main 3D viewport.
-================================================================================
-*/
-
+// Cohen-Sutherland line clipping — assigns a 4-bit outcode to each endpoint
+// (LEFT/RIGHT/BOTTOM/TOP) and iteratively clips the line to the window boundary.
 class CohenSutherlandClipping {
 private:
     static constexpr int INSIDE = 0; // 0000
@@ -42,7 +24,7 @@ private:
     }
 
 public:
-    static bool clipAndDrawLine(SoftwareCanvas& canvas, 
+    static bool clipAndDrawLine(SoftwareCanvas& canvas,
                                 float x0, float y0, float x1, float y1,
                                 float xMin, float yMin, float xMax, float yMax,
                                 uint32_t color) {
@@ -52,14 +34,14 @@ public:
 
         while (true) {
             if ((code0 | code1) == 0) {
-                // Trivial accept: both points are inside window
+                // Both endpoints inside — trivial accept
                 accept = true;
                 break;
             } else if (code0 & code1) {
-                // Trivial reject: both points share an outside region
+                // Both on same outside side — trivial reject
                 break;
             } else {
-                // Calculate line intersection with window border
+                // Clip against the boundary the outside endpoint is beyond
                 float x = 0.0f, y = 0.0f;
                 int outcodeOut = code0 ? code0 : code1;
 
@@ -78,12 +60,10 @@ public:
                 }
 
                 if (outcodeOut == code0) {
-                    x0 = x;
-                    y0 = y;
+                    x0 = x; y0 = y;
                     code0 = computeOutCode(x0, y0, xMin, yMin, xMax, yMax);
                 } else {
-                    x1 = x;
-                    y1 = y;
+                    x1 = x; y1 = y;
                     code1 = computeOutCode(x1, y1, xMin, yMin, xMax, yMax);
                 }
             }

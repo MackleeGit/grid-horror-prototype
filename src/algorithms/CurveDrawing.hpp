@@ -6,25 +6,8 @@
 #include "PolygonOps.hpp"
 #include <vector>
 
-/*
-================================================================================
-PURE C++ BÉZIER CURVES & SPLINES (DE CASTELJAU'S ALGORITHM)
-================================================================================
-(a) What concept does this introduce?
-    Parametric Curves — specifically Cubic Bézier Curves evaluated using De Casteljau's 
-    Algorithm (recursive linear interpolation / lerp between 4 control points P0, P1, P2, P3).
-
-(b) Why is this the correct way to do it at this stage?
-    Polynomial expansion of (1-t)^3 P0 + 3(1-t)^2 t P1 + 3(1-t) t^2 P2 + t^3 P3 is 
-    algebraically fixed. De Casteljau's algorithm provides a numerically stable 
-    geometric interpolation method applicable to splines of arbitrary degree.
-
-(c) What would break if skipped?
-    Smooth enemy patrol paths, organic flashlight flicker animation curves, and 
-    curved UI elements could not be evaluated or rendered in software.
-================================================================================
-*/
-
+// De Casteljau's algorithm for cubic Bézier curves — recursively lerps between
+// control points P0..P3 at parameter t to find a point on the curve.
 class CurveDrawing {
 private:
     static Point2D lerp(const Point2D& p0, const Point2D& p1, float t) {
@@ -32,8 +15,8 @@ private:
     }
 
 public:
-    // Evaluate single point on Cubic Bézier curve at parameter t in [0, 1] using De Casteljau's
-    static Point2D deCasteljau(const Point2D& p0, const Point2D& p1, 
+    // Evaluate a single point on the curve at t in [0, 1]
+    static Point2D deCasteljau(const Point2D& p0, const Point2D& p1,
                                const Point2D& p2, const Point2D& p3, float t) {
         Point2D q0 = lerp(p0, p1, t);
         Point2D q1 = lerp(p1, p2, t);
@@ -45,10 +28,10 @@ public:
         return lerp(r0, r1, t);
     }
 
-    // Draw Cubic Bézier Curve using N linear subdivisions
-    static void drawCubicBezier(SoftwareCanvas& canvas, 
-                                const Point2D& p0, const Point2D& p1, 
-                                const Point2D& p2, const Point2D& p3, 
+    // Draw the curve by connecting N evenly-spaced evaluated points with Bresenham lines
+    static void drawCubicBezier(SoftwareCanvas& canvas,
+                                const Point2D& p0, const Point2D& p1,
+                                const Point2D& p2, const Point2D& p3,
                                 int segments, uint32_t color) {
         Point2D prevPoint = p0;
         for (int i = 1; i <= segments; ++i) {

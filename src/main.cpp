@@ -8,10 +8,9 @@
 #include "Shader.hpp"
 #include "cp1Geometry.h" // Amy: CP1 pure C++ geometry (floor plan + wall wireframe)
 
-// Pure C++ Graphics Algorithms & Minimap HUD Engine
 #include "algorithms/MinimapHUD.hpp"
 
-// Screen Dimensions & Viewport Synchronization
+// Screen and viewport
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
@@ -20,7 +19,7 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
 }
 
 // FPS Camera Representation
-glm::vec3 cameraPos   = glm::vec3(0.0f, 0.0f, 3.0f);
+glm::vec3 cameraPos   = glm::vec3(-7.0f, 0.0f, -5.0f);
 glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
 glm::vec3 cameraUp    = glm::vec3(0.0f, 1.0f, 0.0f);
 
@@ -112,41 +111,20 @@ void processInput(GLFWwindow* window) {
         cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
 }
 
-// -----------------------------------------------------------------------------
-// Level Map Layout
-// 1 = Wall, 0 = Empty Space
-// -----------------------------------------------------------------------------
-const int MAP_WIDTH = 10;
-const int MAP_HEIGHT = 10;
-int levelMap[MAP_HEIGHT][MAP_WIDTH] = {
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
-    {1, 0, 0, 0, 1, 0, 0, 0, 0, 1},
-    {1, 0, 1, 0, 1, 0, 1, 1, 0, 1},
-    {1, 0, 1, 0, 0, 0, 0, 1, 0, 1},
-    {1, 0, 1, 1, 1, 1, 0, 1, 0, 1},
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-    {1, 1, 1, 0, 1, 1, 1, 1, 0, 1},
-    {1, 0, 0, 0, 1, 0, 0, 0, 0, 1},
-    {1, 0, 1, 0, 0, 0, 1, 1, 0, 1},
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
-};
+// Master level house layout from cp1Geometry
+cp1::Grid houseGrid = cp1::defaultHouse();
 
 int main() {
-    // -------------------------------------------------------------------------
-    // [JUSTIFICATION: GLFW Initialization & Core Profile Hints]
-    // (a) What concept does this introduce?
-    //     OS windowing abstraction and explicit OpenGL version targeting.
-    // (b) Why is this the correct way to do it at this stage of the pipeline?
-    //     Modern OpenGL (3.3+) deprecates fixed-function pipeline features (e.g.
-    //     glBegin/glEnd). Requesting CORE_PROFILE ensures legacy functions are
-    //     disabled so we only learn modern, shader-driven programmable pipeline practices.
-    // (c) What would break if omitted?
-    //     Drivers might fall back to a legacy compatibility context, allowing bad
-    //     habits or failing to expose modern GLSL features correctly.
-    // -------------------------------------------------------------------------
-
-    // Run Pure C++ CP1 Geometry Export (Outputs cp1_floorplan.png and cp1_walls_wireframe.png)
+    // CP1 pure C++ demos — write output PNGs before the window opens
     cp1::runGeometryDemo();
+
+    // Export static minimap HUD frame showing all five algorithms
+    {
+        MinimapHUD demoHUD(200, 200);
+        demoHUD.render(-7.0f, -5.0f, -45.0f, 1.5f, houseGrid);
+        demoHUD.canvas.savePNG("cp1_minimap_hud.png");
+    }
+
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW" << std::endl;
         return -1;
@@ -178,15 +156,10 @@ int main() {
     // Depth Testing
     glEnable(GL_DEPTH_TEST);
 
-    // -------------------------------------------------------------------------
-    // Shader Pipelines (Loaded from external GLSL files)
-    // -------------------------------------------------------------------------
     Shader sceneShader("shaders/scene.vert", "shaders/scene.frag");
     Shader hudShader("shaders/hud.vert", "shaders/hud.frag");
 
-    // -------------------------------------------------------------------------
-    // 3D Geometry Setup (Wall Cubes & Floor Quad)
-    // -------------------------------------------------------------------------
+    // Wall cube geometry — 36 vertices, 6 faces
     float vertices[] = {
         // positions          // texture coords
         -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
@@ -246,10 +219,10 @@ int main() {
 
     // Floor Geometry (EBO)
     float floorVertices[] = {
-        -5.0f, -0.5f, -5.0f,    0.0f,  10.0f,
-         5.0f, -0.5f, -5.0f,   10.0f,  10.0f,
-         5.0f, -0.5f,  5.0f,   10.0f,   0.0f,
-        -5.0f, -0.5f,  5.0f,    0.0f,   0.0f
+        -8.5f, -0.5f, -6.5f,    0.0f,  12.0f,
+         8.5f, -0.5f, -6.5f,   16.0f,  12.0f,
+         8.5f, -0.5f,  6.5f,   16.0f,   0.0f,
+        -8.5f, -0.5f,  6.5f,    0.0f,   0.0f
     };
     unsigned int floorIndices[] = { 0, 1, 2, 2, 3, 0 };
 
@@ -269,9 +242,7 @@ int main() {
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
-    // -------------------------------------------------------------------------
-    // 2D HUD Quad Geometry Setup (Top-Right Screen Overlay)
-    // -------------------------------------------------------------------------
+    // HUD quad — top-right corner, screen space NDC coords
     float hudQuadVertices[] = {
         // positions   // texture coords (V inverted for OpenGL texture alignment)
         0.45f,  0.95f,  0.0f, 0.0f,
@@ -295,9 +266,7 @@ int main() {
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
-    // -------------------------------------------------------------------------
-    // Load / Generate Textures (Wall vs Floor)
-    // -------------------------------------------------------------------------
+    // Textures — try to load from file, fall back to a procedural pattern
     stbi_set_flip_vertically_on_load(true);
     int width, height, nrChannels;
 
@@ -418,12 +387,14 @@ int main() {
         // Draw Walls with Wall Texture
         glBindTexture(GL_TEXTURE_2D, wallTexture);
         glBindVertexArray(VAO);
-        for (int z = 0; z < MAP_HEIGHT; z++) {
-            for (int x = 0; x < MAP_WIDTH; x++) {
-                if (levelMap[z][x] == 1) {
+        int mapRows = static_cast<int>(houseGrid.size());
+        int mapCols = static_cast<int>(houseGrid[0].size());
+        for (int z = 0; z < mapRows; z++) {
+            for (int x = 0; x < mapCols; x++) {
+                if (houseGrid[z][x] == '1') {
                     glm::mat4 wallModel = glm::mat4(1.0f);
-                    float posX = (float)x - 5.0f;
-                    float posZ = (float)z - 5.0f;
+                    float posX = static_cast<float>(x) - mapCols * 0.5f;
+                    float posZ = static_cast<float>(z) - mapRows * 0.5f;
                     wallModel = glm::translate(wallModel, glm::vec3(posX, 0.0f, posZ));
                     glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(wallModel));
                     glDrawArrays(GL_TRIANGLES, 0, 36);
@@ -431,12 +402,10 @@ int main() {
             }
         }
 
-        // 2. Render 2D Pure C++ Software Minimap HUD Overlay
+        // Minimap HUD — rendered entirely in software, uploaded to GPU texture
         if (showMinimapHUD) {
-            // Render CPU pixel buffer using Pure C++ graphics algorithms
-            minimapHUD.render(cameraPos.x, cameraPos.z, yaw, currentFrame, levelMap, MAP_WIDTH, MAP_HEIGHT);
+            minimapHUD.render(cameraPos.x, cameraPos.z, yaw, currentFrame, houseGrid, true);
 
-            // Render HUD Quad on top of 3D view (disable depth testing)
             glDisable(GL_DEPTH_TEST);
             hudShader.use();
 
@@ -455,6 +424,22 @@ int main() {
                      "Echoes in the Dark [F2 HUD | F3 Debug] | Pos: (%.2f, %.2f, %.2f) | Yaw: %.1f | FPS: %d",
                      cameraPos.x, cameraPos.y, cameraPos.z, yaw, fps);
             glfwSetWindowTitle(window, title);
+        }
+
+        // Automatic Checkpoint 1 evidence screenshot capture on frame 5
+        static int screenshotFrame = 0;
+        if (++screenshotFrame == 5) {
+            SoftwareCanvas screenCanvas(SCR_WIDTH, SCR_HEIGHT);
+            std::vector<uint8_t> glPixels(SCR_WIDTH * SCR_HEIGHT * 3);
+            glReadPixels(0, 0, SCR_WIDTH, SCR_HEIGHT, GL_RGB, GL_UNSIGNED_BYTE, glPixels.data());
+            for (int y = 0; y < (int)SCR_HEIGHT; ++y) {
+                int srcY = (int)SCR_HEIGHT - 1 - y;
+                for (int x = 0; x < (int)SCR_WIDTH; ++x) {
+                    int srcIdx = (srcY * SCR_WIDTH + x) * 3;
+                    screenCanvas.setPixel(x, y, rgba(glPixels[srcIdx], glPixels[srcIdx + 1], glPixels[srcIdx + 2]));
+                }
+            }
+            screenCanvas.savePNG("cp1_gameplay_3d_hud.png");
         }
 
         glfwSwapBuffers(window);
