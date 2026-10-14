@@ -6,6 +6,7 @@
 #include <iostream>
 #include "../external/stb_image.h"
 #include "Shader.hpp"
+#include "cp1Geometry.h" // Amy: CP1 pure C++ geometry (floor plan + wall wireframe)
 
 // Pure C++ Graphics Algorithms & Minimap HUD Engine
 #include "algorithms/MinimapHUD.hpp"
@@ -131,7 +132,21 @@ int levelMap[MAP_HEIGHT][MAP_WIDTH] = {
 };
 
 int main() {
-    // GLFW Init & Core Profile
+    // -------------------------------------------------------------------------
+    // [JUSTIFICATION: GLFW Initialization & Core Profile Hints]
+    // (a) What concept does this introduce?
+    //     OS windowing abstraction and explicit OpenGL version targeting.
+    // (b) Why is this the correct way to do it at this stage of the pipeline?
+    //     Modern OpenGL (3.3+) deprecates fixed-function pipeline features (e.g.
+    //     glBegin/glEnd). Requesting CORE_PROFILE ensures legacy functions are
+    //     disabled so we only learn modern, shader-driven programmable pipeline practices.
+    // (c) What would break if omitted?
+    //     Drivers might fall back to a legacy compatibility context, allowing bad
+    //     habits or failing to expose modern GLSL features correctly.
+    // -------------------------------------------------------------------------
+
+    // Run Pure C++ CP1 Geometry Export (Outputs cp1_floorplan.png and cp1_walls_wireframe.png)
+    cp1::runGeometryDemo();
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW" << std::endl;
         return -1;
