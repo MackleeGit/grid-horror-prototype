@@ -1,11 +1,11 @@
 #ifndef BLUEPRINT_RENDERER_HPP
 #define BLUEPRINT_RENDERER_HPP
 
-#include "../algorithms/SoftwareCanvas.hpp"
-#include "../algorithms/LineDrawing.hpp"
-#include "../algorithms/PolygonOps.hpp"
-#include "../algorithms/MatrixMath3D.hpp"
-#include "../level/HouseGrid.hpp"
+#include "../../../src/algorithms/SoftwareCanvas.hpp"
+#include "../../../src/algorithms/LineDrawing.hpp"
+#include "../../../src/algorithms/PolygonOps.hpp"
+#include "../../../src/algorithms/MatrixMath3D.hpp"
+#include "../../../src/level/HouseGrid.hpp"
 #include <iostream>
 #include <vector>
 #include <cmath>
@@ -177,8 +177,9 @@ inline void runGeometryDemo() {
     SoftwareCanvas wire(960, 640, rgba(10, 10, 14));
     renderWallWireframe(g, wire);
 
-    bool ok = plan.savePNG("cp1_floorplan.png") && wire.savePNG("cp1_walls_wireframe.png");
-    std::cout << (ok ? "[CP1 Blueprint Pipeline] Generated cp1_floorplan.png and cp1_walls_wireframe.png\n"
+    bool ok = plan.savePNG("checkpoints/checkpoint1/cp1_output/cp1_floorplan.png") && 
+              wire.savePNG("checkpoints/checkpoint1/cp1_output/cp1_walls_wireframe.png");
+    std::cout << (ok ? "[CP1 Blueprint Pipeline] Generated checkpoints/checkpoint1/cp1_output/ PNGs\n"
                      : "[CP1 Blueprint Pipeline] Failed to export PNG blueprints\n");
 }
 

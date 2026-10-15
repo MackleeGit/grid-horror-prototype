@@ -6,7 +6,6 @@
 #include "CircleDrawing.hpp"
 #include "PolygonOps.hpp"
 #include "Clipping.hpp"
-#include "CurveDrawing.hpp"
 #include "../level/HouseGrid.hpp"
 #include <vector>
 #include <cmath>
@@ -95,17 +94,6 @@ public:
         float mapPlayerX = (playerX + mapCols * 0.5f) * tileW;
         float mapPlayerY = (playerZ + mapRows * 0.5f) * tileH;
 
-        // 3) De Casteljau Bézier — entity search path / acoustic sensor curve
-        Point2D p0 = { 20.0f,  20.0f  };
-        Point2D p1 = { canvas.width - 20.0f, 40.0f  };
-        Point2D p2 = { 20.0f,  canvas.height - 40.0f };
-        Point2D p3 = { canvas.width - 20.0f, canvas.height - 20.0f };
-        CurveDrawing::drawCubicBezier(canvas, p0, p1, p2, p3, 30, rgba(136, 51, 51));
-
-        // Animated entity ping along the Bézier curve
-        float curveT = std::fmod(timeSeconds * 0.2f, 1.0f);
-        Point2D entityPos = CurveDrawing::deCasteljau(p0, p1, p2, p3, curveT);
-        CircleDrawing::drawFilledCircle(canvas, static_cast<int>(entityPos.x), static_cast<int>(entityPos.y), 3, rgba(255, 51, 51));
 
         // 4) Cohen-Sutherland clipping — player sightline ray, clipped to HUD inner bounds
         float yawRad = yawDegrees * 3.14159265f / 180.0f;

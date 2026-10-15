@@ -9,8 +9,8 @@
 //   - src/algorithms/SoftwareCanvas.hpp  (CPU buffer and zero-dependency PNG export)
 // All line drawing and polygon fills invoke src/algorithms/LineDrawing.hpp and PolygonOps.hpp.
 
-#include "level/HouseGrid.hpp"
-#include "algorithms/MatrixMath3D.hpp"
+#include "../../src/level/HouseGrid.hpp"
+#include "../../src/algorithms/MatrixMath3D.hpp"
 #include "pipeline/BlueprintRenderer.hpp"
 
 #endif // CP1_GEOMETRY_H
