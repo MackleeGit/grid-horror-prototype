@@ -4,10 +4,10 @@
 A real-time 3D First-Person Survival Horror Game built in standard C++17, featuring an offline **Pure C++ Software Rasterization Engine** and a hardware-accelerated **OpenGL 3.3 Core Profile Graphics Pipeline**.
 
 > [!IMPORTANT]
-> **Lecturer Evaluation Navigation:**
-> For grading Checkpoint 1, please refer directly to the dedicated technical guide:
+> **Checkpoint Evaluation Navigation:**
+> For Checkpoint 1, please refer directly to the dedicated technical guide:
 > **[`checkpoints/checkpoint1/CHECKPOINT1.md`](checkpoints/checkpoint1/CHECKPOINT1.md)**
-> All auto-generated pure C++ algorithmic output images are located in:
+> All pure C++ algorithmic output images are located in:
 > **[`checkpoints/checkpoint1/cp1_output/`](checkpoints/checkpoint1/cp1_output/)**
 
 ---
@@ -26,7 +26,7 @@ Set within an oppressive, pitch-black maze, the player navigates an enclosed 3D 
 ## 2. Group Members, Foundational Duties & Work Allocation
 
 ### Context on Initial Commit Distribution
-The project's initial commit history reflects a deliberate architectural approach: **Macklee Nderitu Gitonga (168000)** undertook the foundational systems architecture, CMake/Ninja build configuration, OpenGL context bootstrapping, and the initial pure C++ software rasterization buffer (`SoftwareCanvas`). This heavy early lifting was necessary to establish a stable, compile-ready platform for the entire team. With the core foundation secured, subsequent and upcoming milestone tasks are redistributed across all group members.
+The project's initial commit history reflects a deliberate architectural approach: **Macklee Nderitu Gitonga (168000)** undertook the foundational systems architecture, CMake/Ninja build configuration, OpenGL context bootstrapping, and the initial pure C++ software rasterization buffer (`SoftwareCanvas`). This early stage work was necessary to establish a stable, compile-ready platform for the work to come. With the core foundation secured, subsequent and upcoming milestone tasks are distributed across all group members.
 
 ### Member Roles & Responsibility Matrix
 
@@ -134,10 +134,10 @@ cmake --build build
 
 ## 7. Current Progress Summary
 
-- ✅ **Checkpoint 1 / Phase 1 (Foundation):** FPS Camera, GLFW window context, Delta Time, WASD movement, mouse-look, and F3 telemetry.
-- ✅ **Checkpoint 1 / Phase 2 (Geometry & Shaders):** 3D cube wall instancing, floor quads, procedural brick/stone textures, modular GLSL shaders.
-- ✅ **Checkpoint 1 Pure C++ Engine:** Full algorithm suite in `src/algorithms/` (Bresenham lines, Scanline fill, Polygon transforms, Cohen-Sutherland clipping, Midpoint circles, Midpoint ellipses, Bézier curves).
-- ✅ **Offline Demonstration Pipeline:** Amy's geometry pipeline automatically exports PNG blueprints to `checkpoints/checkpoint1/cp1_output/`.
+-  **(Foundation):** FPS Camera, GLFW window context, Delta Time, WASD movement, mouse-look, and F3 telemetry.
+-  **(Geometry & Shaders):** 3D cube wall instancing, floor quads, procedural brick/stone textures, modular GLSL shaders.
+-  **Pure C++ Engine:** Full algorithm suite in `src/algorithms/` (Bresenham lines, Scanline fill, Polygon transforms, Cohen-Sutherland clipping, Midpoint circles, Midpoint ellipses, Bézier curves).
+-  **Offline Demonstration Pipeline:** Amy's geometry pipeline automatically exports PNG blueprints to `checkpoints/checkpoint1/cp1_output/`.
 
 ---
 
