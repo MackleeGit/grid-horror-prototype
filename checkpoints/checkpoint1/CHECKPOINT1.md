@@ -9,11 +9,11 @@
 
 ## 1. Purpose & Checkpoint 1 Fulfillment Overview
 
-The purpose of Checkpoint 1 is to demonstrate meaningful technical progress and establish a working foundation in **Pure C++ Computer Graphics Algorithms**. Rather than relying entirely on hardware abstraction or high-level graphics APIs, this milestone proves a deep, hands-on understanding of the core mathematical principles taught in class.
+The purpose of Checkpoint 1 is to demonstrate meaningful technical progress and establish a working foundation in **Pure C++ Computer Graphics Algorithms**. 
 
-In this project, all fundamental graphics algorithms run strictly on the **CPU** without calling OpenGL, Vulkan, or external rendering libraries. Algorithms operate on raw CPU pixel arrays (`std::vector<uint32_t>`) encapsulated within `src/algorithms/SoftwareCanvas.hpp`.
+In this project, all fundamental graphics algorithms run strictly on the **CPU** without calling external rendering libraries. Algorithms operate on raw CPU pixel arrays (`std::vector<uint32_t>`) encapsulated within `src/algorithms/SoftwareCanvas.hpp`.
 
-To evaluate these algorithms objectively without forcing the evaluator to navigate an interactive 3D scene, **Amy Asembo Ojuka** developed an **offline CPU blueprint generation pipeline** (`checkpoints/checkpoint1/pipeline/BlueprintRenderer.hpp`). Upon program execution, this pipeline executes pure C++ algorithms to render architectural floor plans, 3D wireframe projections, and HUD overlays, saving timestamped PNG evidence directly into `checkpoints/checkpoint1/cp1_output/`.
+To evaluate these algorithms objectively without forcing the evaluator to navigate an interactive 3D scene, **Amy Asembo Ojuka** developed an **offline CPU blueprint generation pipeline** (`checkpoints/checkpoint1/pipeline/BlueprintRenderer.hpp`). Upon program execution, this pipeline executes pure C++ algorithms to render architectural floor plans, 3D wireframe projections, and HUD overlays, saving the PNGs directly into `checkpoints/checkpoint1/cp1_output/`.
 
 ---
 
@@ -53,9 +53,9 @@ horror-project/
 
 ## 3. Syllabus Mapping & Algorithm Implementation Catalog
 
-Every graphics technique covered in the curriculum is implemented in pure C++ in `src/algorithms/`:
+Graphics techniques are implemented in pure C++ in `src/algorithms/`:
 
-| Syllabus Topic | Algorithm Implemented | Source File & Class | Mathematical Method / Formula | Project Role & Demonstration Output |
+| Concept| Algorithm Implemented | Source File & Class | Mathematical Method / Formula | Project Role & Demonstration Output |
 | :--- | :--- | :--- | :--- | :--- |
 | **Line Drawing & Operations** | **Bresenham’s Line Algorithm** | [`LineDrawing.hpp`](../../src/algorithms/LineDrawing.hpp)<br>`LineDrawing::drawLine()` | Integer error decision variable:<br>$p_{k+1} = p_k + 2\Delta y - 2\Delta x (y_{k+1}-y_k)$<br>Zero floating point division. | • Architectural floor plan grid lines.<br>• 12 edges per 3D cube in wireframe view.<br>• Output: `cp1_floorplan.png`, `cp1_walls_wireframe.png`. |
 | **Polygon Representation & Operations** | **2D Affine Transforms & Polygon Bounds** | [`PolygonOps.hpp`](../../src/algorithms/PolygonOps.hpp)<br>`Polygon2D`<br>`translate(), rotate(), scale()` | $2\text{D}$ matrix operations:<br>$\begin{bmatrix} x' \\ y' \end{bmatrix} = \begin{bmatrix} \cos\theta & -\sin\theta \\ \sin\theta & \cos\theta \end{bmatrix} \begin{bmatrix} x \\ y \end{bmatrix}$ | • 2D wall block representation.<br>• Closet doors and rotated diamond fuse items.<br>• Output: `cp1_floorplan.png`. |
@@ -67,9 +67,9 @@ Every graphics technique covered in the curriculum is implemented in pure C++ in
 
 ---
 
-## 4. Amy's Offline Blueprint Pipeline Demonstration
+## 4. Offline Blueprint Pipeline Demonstration
 
-Rather than forcing the marker to test algorithms inside an interactive game loop, Amy Ojuka built an **offline geometry verification suite** in `checkpoints/checkpoint1/pipeline/BlueprintRenderer.hpp`. When the application initializes, it executes `cp1::runGeometryDemo()` to generate two standalone image proofs:
+We implemented an **offline geometry verification suite** in `checkpoints/checkpoint1/pipeline/BlueprintRenderer.hpp`. When the application initializes, it executes `cp1::runGeometryDemo()` to generate two standalone image proofs:
 
 ### 1. Top-Down Architectural Blueprint (`cp1_floorplan.png`)
 - **Algorithms Used:** Scanline Polygon Fill (`Polygon2D::scanlineFill`) and Bresenham’s Line Algorithm (`LineDrawing::drawLine`).
@@ -90,8 +90,7 @@ Rather than forcing the marker to test algorithms inside an interactive game loo
 
 ---
 
-## 5. Planned Project Applications (Connecting Theory to Game Systems)
-
+## 5. Planned Project Applications 
 The algorithms implemented for Checkpoint 1 directly unlock the upcoming milestones:
 
 1. **Bresenham Grid Raycasting (Enemy Line-of-Sight & Sound Occlusion - Phase 5):**
