@@ -9,7 +9,6 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 
-
 // Screen and viewport
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
@@ -40,6 +39,7 @@ void mouse_callback(GLFWwindow *window, double xposIn, double yposIn) {
 
   if (firstMouse) {
     lastX = xpos;
+
     lastY = ypos;
     firstMouse = false;
   }
@@ -128,7 +128,8 @@ int main() {
   {
     MinimapHUD demoHUD(200, 200);
     demoHUD.render(-7.0f, -5.0f, -45.0f, 1.5f, houseGrid);
-    demoHUD.canvas.savePNG("checkpoints/checkpoint1/cp1_output/cp1_minimap_hud.png");
+    demoHUD.canvas.savePNG(
+        "checkpoints/checkpoint1/cp1_output/cp1_minimap_hud.png");
   }
 
   if (!glfwInit()) {
@@ -443,7 +444,8 @@ int main() {
                                      glPixels[srcIdx + 2]));
         }
       }
-      screenCanvas.savePNG("checkpoints/checkpoint1/cp1_output/cp1_gameplay_3d_hud.png");
+      screenCanvas.savePNG(
+          "checkpoints/checkpoint1/cp1_output/cp1_gameplay_3d_hud.png");
     }
 
     glfwSwapBuffers(window);

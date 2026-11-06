@@ -1,7 +1,7 @@
 # 3D SURVIVAL HORROR APPLICATION
 *(Working Title: Echoes in the Dark)*
 
-A real-time 3D First-Person Survival Horror Game built in standard C++17, featuring an offline **Pure C++ Software Rasterization Engine** and a hardware-accelerated **OpenGL 3.3 Core Profile Graphics Pipeline**.
+The project is a first-person survival horror game built in C++ and OpenGL. The player navigates a dark, enclosed maze to collect fuses and escape, combining real-time 3D exploration with a custom CPU-rendered minimap HUD to track surroundings and avoid a roaming entity
 
 > [!IMPORTANT]
 > **Checkpoint Evaluation Navigation:**
