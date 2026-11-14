@@ -56,6 +56,17 @@ public:
         }
         return false;
     }
+
+    static glm::vec3 resolveMovement(const glm::vec3& currentPos,
+                                     const glm::vec3& deltaMovement,
+                                     const cp1::Grid& grid) {
+        glm::vec3 newPos = currentPos;
+        float candidateX = currentPos.x + deltaMovement.x;
+        if (!isColliding(candidateX, currentPos.z, grid)) {
+            newPos.x = candidateX;
+        }
+        return newPos;
+    }
 };
 
 #endif // COLLISION_ENGINE_HPP
