@@ -61,13 +61,16 @@ public:
                                      const glm::vec3& deltaMovement,
                                      const cp1::Grid& grid) {
         glm::vec3 newPos = currentPos;
+
         float candidateX = currentPos.x + deltaMovement.x;
-        if (!isColliding(candidateX, currentPos.z, grid)) {
+        bool blockedX = isColliding(candidateX, currentPos.z, grid);
+        if (!blockedX) {
             newPos.x = candidateX;
         }
 
         float candidateZ = currentPos.z + deltaMovement.z;
-        if (!isColliding(currentPos.x, candidateZ, grid)) {
+        bool blockedZ = isColliding(currentPos.x, candidateZ, grid);
+        if (!blockedZ) {
             newPos.z = candidateZ;
         }
 
