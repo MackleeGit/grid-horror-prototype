@@ -70,6 +70,8 @@ public:
         if (!isColliding(currentPos.x, candidateZ, grid)) {
             newPos.z = candidateZ;
         }
+
+        newPos.y = 0.0f;
         return newPos;
     }
 };
