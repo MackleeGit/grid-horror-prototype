@@ -18,9 +18,23 @@
 #include <iostream>
 #include <vector>
 
-// Screen and viewport
-const unsigned int SCR_WIDTH = 800;
-const unsigned int SCR_HEIGHT = 600;
+// Screen and viewport defaults
+const unsigned int SCR_WIDTH = 1280;
+const unsigned int SCR_HEIGHT = 720;
+int currentWidth = SCR_WIDTH;
+int currentHeight = SCR_HEIGHT;
+
+// Window and Fullscreen State
+bool isFullscreen = false;
+bool f11PressedLastFrame = false;
+int windowedPosX = 100;
+int windowedPosY = 100;
+int windowedWidth = SCR_WIDTH;
+int windowedHeight = SCR_HEIGHT;
+
+// Pause and Cursor State
+bool isPaused = false;
+bool pausePressedLastFrame = false;
 
 // Master level house layout
 cp1::Grid houseGrid = cp1::defaultHouse();
@@ -59,11 +73,58 @@ bool f2PressedLastFrame = false;
 
 // Framebuffer Callback
 void framebuffer_size_callback(GLFWwindow *window, int width, int height) {
-    glViewport(0, 0, width, height);
+    if (width > 0 && height > 0) {
+        currentWidth = width;
+        currentHeight = height;
+        glViewport(0, 0, width, height);
+    }
+}
+
+// Fullscreen Toggle
+void toggleFullscreen(GLFWwindow *window) {
+    isFullscreen = !isFullscreen;
+    if (isFullscreen) {
+        glfwGetWindowPos(window, &windowedPosX, &windowedPosY);
+        glfwGetWindowSize(window, &windowedWidth, &windowedHeight);
+
+        GLFWmonitor *monitor = glfwGetPrimaryMonitor();
+        if (monitor) {
+            const GLFWvidmode *mode = glfwGetVideoMode(monitor);
+            if (mode) {
+                glfwSetWindowMonitor(
+                    window, monitor, 0, 0,
+                    mode->width, mode->height, mode->refreshRate
+                );
+            }
+        }
+    } else {
+        glfwSetWindowMonitor(
+            window, nullptr,
+            windowedPosX, windowedPosY,
+            windowedWidth, windowedHeight,
+            0
+        );
+    }
+}
+
+// Mouse Button Callback (click inside paused window to resume)
+void mouse_button_callback(GLFWwindow *window, int button, int action, int mods) {
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+        if (isPaused) {
+            isPaused = false;
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+            firstMouse = true;
+            glfwSetWindowTitle(window, "3D Survival Horror Application");
+        }
+    }
 }
 
 // Mouse Callback
 void mouse_callback(GLFWwindow *window, double xposIn, double yposIn) {
+    if (isPaused) {
+        return;
+    }
+
     float xpos = static_cast<float>(xposIn);
     float ypos = static_cast<float>(yposIn);
 
@@ -104,9 +165,44 @@ void mouse_callback(GLFWwindow *window, double xposIn, double yposIn) {
 // Input Processing
 void processInput(GLFWwindow *window) {
 
-    // Exit game
-    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
-        glfwSetWindowShouldClose(window, true);
+    // F11: Fullscreen Toggle
+    if (glfwGetKey(window, GLFW_KEY_F11) == GLFW_PRESS) {
+        if (!f11PressedLastFrame) {
+            toggleFullscreen(window);
+            f11PressedLastFrame = true;
+        }
+    } else {
+        f11PressedLastFrame = false;
+    }
+
+    // ESC or P: Toggle Pause & Release Mouse Cursor
+    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS) {
+        if (!pausePressedLastFrame) {
+            isPaused = !isPaused;
+            pausePressedLastFrame = true;
+
+            if (isPaused) {
+                glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+                glfwSetWindowTitle(
+                    window,
+                    "3D Survival Horror Application - [PAUSED] (Click or Press ESC/P to Resume, F11 for Fullscreen, Q to Quit)"
+                );
+            } else {
+                glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+                firstMouse = true;
+                glfwSetWindowTitle(window, "3D Survival Horror Application");
+            }
+        }
+    } else {
+        pausePressedLastFrame = false;
+    }
+
+    // When paused, pressing Q will exit the application cleanly
+    if (isPaused) {
+        if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
+            glfwSetWindowShouldClose(window, true);
+        }
+        return; // Halt player movement while paused
     }
 
     // F3: Toggle debug telemetry
@@ -116,7 +212,7 @@ void processInput(GLFWwindow *window) {
             f3PressedLastFrame = true;
 
             if (!showDebugTelemetry) {
-                glfwSetWindowTitle(window, "Echoes in the Dark");
+                glfwSetWindowTitle(window, "3D Survival Horror Application");
             }
         }
     } else {
@@ -254,7 +350,7 @@ int main() {
     GLFWwindow *window = glfwCreateWindow(
         SCR_WIDTH,
         SCR_HEIGHT,
-        "Echoes in the Dark",
+        "3D Survival Horror Application",
         nullptr,
         nullptr
     );
@@ -265,10 +361,22 @@ int main() {
         return -1;
     }
 
+    // Center window on primary monitor
+    GLFWmonitor *primaryMonitor = glfwGetPrimaryMonitor();
+    if (primaryMonitor) {
+        const GLFWvidmode *mode = glfwGetVideoMode(primaryMonitor);
+        if (mode) {
+            int posX = (mode->width - static_cast<int>(SCR_WIDTH)) / 2;
+            int posY = (mode->height - static_cast<int>(SCR_HEIGHT)) / 2;
+            glfwSetWindowPos(window, posX, posY);
+        }
+    }
+
     glfwMakeContextCurrent(window);
 
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetCursorPosCallback(window, mouse_callback);
+    glfwSetMouseButtonCallback(window, mouse_button_callback);
 
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
@@ -630,6 +738,10 @@ int main() {
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
 
+        if (isPaused) {
+            deltaTime = 0.0f; // Prevent accumulator delta spike upon unpausing
+        }
+
         processInput(window);
 
         glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
@@ -642,10 +754,14 @@ int main() {
         glm::mat4 view =
             glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
 
+        float aspect = (currentHeight > 0)
+            ? (static_cast<float>(currentWidth) / static_cast<float>(currentHeight))
+            : (16.0f / 9.0f);
+
         glm::mat4 projection =
             glm::perspective(
                 glm::radians(45.0f),
-                (float)SCR_WIDTH / (float)SCR_HEIGHT,
+                aspect,
                 0.1f,
                 100.0f
             );
@@ -836,7 +952,7 @@ int main() {
             std::snprintf(
                 title,
                 sizeof(title),
-                "Echoes in the Dark | Fuses: %d/3 | %s | "
+                "3D Survival Horror Application | Fuses: %d/3 | %s | "
                 "Pos: (%.2f, %.2f, %.2f) | FPS: %d",
                 interactionSystem.fusesCollected,
                 playerState,
@@ -853,25 +969,25 @@ int main() {
         static int screenshotFrame = 0;
 
         if (++screenshotFrame == 5) {
-            SoftwareCanvas screenCanvas(SCR_WIDTH, SCR_HEIGHT);
+            SoftwareCanvas screenCanvas(currentWidth, currentHeight);
 
-            std::vector<uint8_t> glPixels(SCR_WIDTH * SCR_HEIGHT * 3);
+            std::vector<uint8_t> glPixels(currentWidth * currentHeight * 3);
 
             glReadPixels(
                 0,
                 0,
-                SCR_WIDTH,
-                SCR_HEIGHT,
+                currentWidth,
+                currentHeight,
                 GL_RGB,
                 GL_UNSIGNED_BYTE,
                 glPixels.data()
             );
 
-            for (int y = 0; y < (int)SCR_HEIGHT; ++y) {
-                int srcY = (int)SCR_HEIGHT - 1 - y;
+            for (int y = 0; y < currentHeight; ++y) {
+                int srcY = currentHeight - 1 - y;
 
-                for (int x = 0; x < (int)SCR_WIDTH; ++x) {
-                    int srcIdx = (srcY * SCR_WIDTH + x) * 3;
+                for (int x = 0; x < currentWidth; ++x) {
+                    int srcIdx = (srcY * currentWidth + x) * 3;
 
                     screenCanvas.setPixel(
                         x,
