@@ -65,6 +65,11 @@ public:
         if (!isColliding(candidateX, currentPos.z, grid)) {
             newPos.x = candidateX;
         }
+
+        float candidateZ = currentPos.z + deltaMovement.z;
+        if (!isColliding(currentPos.x, candidateZ, grid)) {
+            newPos.z = candidateZ;
+        }
         return newPos;
     }
 };
