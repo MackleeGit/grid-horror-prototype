@@ -4,6 +4,7 @@
 #include "Shader.hpp"
 #include "algorithms/MinimapHUD.hpp"
 #include "gameplay/InteractionSystem.hpp"
+#include "physics/CollisionEngine.hpp"
 
 #include <GLFW/glfw3.h>
 #include <glad/glad.h>
@@ -204,10 +205,11 @@ void processInput(GLFWwindow *window) {
         if (right)
             movement += rightDirection;
 
-        // Normalize diagonal movement.
+        // Normalize diagonal movement and resolve wall collisions with sliding physics.
         if (glm::length(movement) > 0.0f) {
             movement = glm::normalize(movement);
-            cameraPos += movement * cameraSpeed;
+            glm::vec3 deltaMovement = movement * cameraSpeed;
+            cameraPos = CollisionEngine::resolveMovement(cameraPos, deltaMovement, houseGrid);
         }
     }
 
@@ -574,6 +576,22 @@ int main() {
 
         glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
+
+        // Flashlight / Spotlight Lighting Uniforms
+        glUniform3fv(glGetUniformLocation(sceneShader.ID, "lightPos"), 1, glm::value_ptr(cameraPos));
+        glUniform3fv(glGetUniformLocation(sceneShader.ID, "lightDir"), 1, glm::value_ptr(cameraFront));
+        glUniform1f(glGetUniformLocation(sceneShader.ID, "cutOff"), std::cos(glm::radians(12.5f)));
+        glUniform1f(glGetUniformLocation(sceneShader.ID, "outerCutOff"), std::cos(glm::radians(17.5f)));
+        glUniform1f(glGetUniformLocation(sceneShader.ID, "constant"), 1.0f);
+        glUniform1f(glGetUniformLocation(sceneShader.ID, "linear"), 0.09f);
+        glUniform1f(glGetUniformLocation(sceneShader.ID, "quadratic"), 0.032f);
+        glUniform1f(glGetUniformLocation(sceneShader.ID, "ambientStrength"), 0.06f);
+
+        // Subtle atmospheric electrical flicker
+        float flicker = 1.0f;
+        float noise = std::sin(currentFrame * 35.0f) * std::cos(currentFrame * 17.0f);
+        if (noise < -0.65f) flicker = 0.35f;
+        glUniform1f(glGetUniformLocation(sceneShader.ID, "flickerFactor"), flicker);
 
         // Draw Floor with Floor Texture
         glActiveTexture(GL_TEXTURE0);
