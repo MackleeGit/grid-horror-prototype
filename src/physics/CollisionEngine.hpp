@@ -9,6 +9,7 @@
 class CollisionEngine {
 public:
     static constexpr float PLAYER_RADIUS = 0.3f;
+    static constexpr float WALL_HALF_EXTENT = 0.5f;
 
     struct AABB {
         float minX;
@@ -23,6 +24,17 @@ public:
             x + PLAYER_RADIUS,
             z - PLAYER_RADIUS,
             z + PLAYER_RADIUS
+        };
+    }
+
+    static AABB wallBoundsAt(int col, int row, int mapCols, int mapRows) {
+        float centerX = static_cast<float>(col) - mapCols * 0.5f;
+        float centerZ = static_cast<float>(row) - mapRows * 0.5f;
+        return {
+            centerX - WALL_HALF_EXTENT,
+            centerX + WALL_HALF_EXTENT,
+            centerZ - WALL_HALF_EXTENT,
+            centerZ + WALL_HALF_EXTENT
         };
     }
 };
