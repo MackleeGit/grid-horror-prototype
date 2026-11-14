@@ -95,28 +95,30 @@ public:
             }
         }
 
-        // 2. Check whether the player is standing on a closet tile.
+        // 2. Closet hiding interaction
+        if (isPlayerHidden) {
+            // Already hidden: pressing E steps out of the closet
+            isPlayerHidden = false;
+            std::cout << "[HIDING] Exited closet.\n";
+            return;
+        }
+
+        // Check for nearby closet within interaction radius (1.6 units)
         const int mapRows = static_cast<int>(grid.size());
         const int mapCols = static_cast<int>(grid[0].size());
 
-        int col = static_cast<int>(
-            std::floor(playerPos.x + mapCols * 0.5f + 0.5f)
-        );
-
-        int row = static_cast<int>(
-            std::floor(playerPos.z + mapRows * 0.5f + 0.5f)
-        );
-
-        if (cp1::cellAt(grid, col, row) == 'H') {
-
-            isPlayerHidden = !isPlayerHidden;
-
-            if (isPlayerHidden) {
-                std::cout
-                    << "[HIDING] Entered closet. Safe from entity.\n";
-            } else {
-                std::cout
-                    << "[HIDING] Exited closet.\n";
+        for (int row = 0; row < mapRows; ++row) {
+            for (int col = 0; col < mapCols; ++col) {
+                if (cp1::cellAt(grid, col, row) == 'H') {
+                    float closetX = static_cast<float>(col) - mapCols * 0.5f;
+                    float closetZ = static_cast<float>(row) - mapRows * 0.5f;
+                    float dist = glm::distance(glm::vec2(playerPos.x, playerPos.z), glm::vec2(closetX, closetZ));
+                    if (dist <= 1.6f) {
+                        isPlayerHidden = true;
+                        std::cout << "[HIDING] Entered closet. Safe from entity.\n";
+                        return;
+                    }
+                }
             }
         }
     }

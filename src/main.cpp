@@ -71,6 +71,10 @@ bool showMinimapHUD = true;
 bool f3PressedLastFrame = false;
 bool f2PressedLastFrame = false;
 
+// Flashlight state
+bool flashlightOn = true;
+bool fPressedLastFrame = false;
+
 // Framebuffer Callback
 void framebuffer_size_callback(GLFWwindow *window, int width, int height) {
     if (width > 0 && height > 0) {
@@ -237,6 +241,16 @@ void processInput(GLFWwindow *window) {
         }
     } else {
         ePressedLastFrame = false;
+    }
+
+    // F: Toggle Flashlight Spotlight / Bright Work-Light Mode
+    if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS) {
+        if (!fPressedLastFrame) {
+            flashlightOn = !flashlightOn;
+            fPressedLastFrame = true;
+        }
+    } else {
+        fPressedLastFrame = false;
     }
 
     // Determine movement keys
@@ -776,18 +790,26 @@ int main() {
         // Flashlight / Spotlight Lighting Uniforms
         glUniform3fv(glGetUniformLocation(sceneShader.ID, "lightPos"), 1, glm::value_ptr(cameraPos));
         glUniform3fv(glGetUniformLocation(sceneShader.ID, "lightDir"), 1, glm::value_ptr(cameraFront));
-        glUniform1f(glGetUniformLocation(sceneShader.ID, "cutOff"), std::cos(glm::radians(12.5f)));
-        glUniform1f(glGetUniformLocation(sceneShader.ID, "outerCutOff"), std::cos(glm::radians(17.5f)));
-        glUniform1f(glGetUniformLocation(sceneShader.ID, "constant"), 1.0f);
-        glUniform1f(glGetUniformLocation(sceneShader.ID, "linear"), 0.09f);
-        glUniform1f(glGetUniformLocation(sceneShader.ID, "quadratic"), 0.032f);
-        glUniform1f(glGetUniformLocation(sceneShader.ID, "ambientStrength"), 0.06f);
 
-        // Subtle atmospheric electrical flicker
-        float flicker = 1.0f;
-        float noise = std::sin(currentFrame * 35.0f) * std::cos(currentFrame * 17.0f);
-        if (noise < -0.65f) flicker = 0.35f;
-        glUniform1f(glGetUniformLocation(sceneShader.ID, "flickerFactor"), flicker);
+        if (flashlightOn) {
+            // Horror Spotlight Mode: Comfortable wide beam, ambient visibility, steady beam
+            glUniform1f(glGetUniformLocation(sceneShader.ID, "cutOff"), std::cos(glm::radians(18.0f)));
+            glUniform1f(glGetUniformLocation(sceneShader.ID, "outerCutOff"), std::cos(glm::radians(26.0f)));
+            glUniform1f(glGetUniformLocation(sceneShader.ID, "constant"), 1.0f);
+            glUniform1f(glGetUniformLocation(sceneShader.ID, "linear"), 0.05f);
+            glUniform1f(glGetUniformLocation(sceneShader.ID, "quadratic"), 0.015f);
+            glUniform1f(glGetUniformLocation(sceneShader.ID, "ambientStrength"), 0.20f);
+            glUniform1f(glGetUniformLocation(sceneShader.ID, "flickerFactor"), 1.0f);
+        } else {
+            // Full Visibility Mode: High ambient fill across the entire level
+            glUniform1f(glGetUniformLocation(sceneShader.ID, "cutOff"), std::cos(glm::radians(85.0f)));
+            glUniform1f(glGetUniformLocation(sceneShader.ID, "outerCutOff"), std::cos(glm::radians(89.0f)));
+            glUniform1f(glGetUniformLocation(sceneShader.ID, "constant"), 1.0f);
+            glUniform1f(glGetUniformLocation(sceneShader.ID, "linear"), 0.01f);
+            glUniform1f(glGetUniformLocation(sceneShader.ID, "quadratic"), 0.005f);
+            glUniform1f(glGetUniformLocation(sceneShader.ID, "ambientStrength"), 0.85f);
+            glUniform1f(glGetUniformLocation(sceneShader.ID, "flickerFactor"), 1.0f);
+        }
 
         // Draw Floor with Floor Texture
         glActiveTexture(GL_TEXTURE0);
