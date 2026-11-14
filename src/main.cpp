@@ -539,6 +539,86 @@ int main() {
         glGenerateMipmap(GL_TEXTURE_2D);
     }
 
+    // 3. Fuse Collectible Texture (Glowing Golden Amber / Electric Yellow)
+    unsigned int fuseTexture;
+    glGenTextures(1, &fuseTexture);
+    glBindTexture(GL_TEXTURE_2D, fuseTexture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    {
+        unsigned char fusePixels[16 * 16 * 4];
+        for (int y = 0; y < 16; ++y) {
+            for (int x = 0; x < 16; ++x) {
+                int idx = (y * 16 + x) * 4;
+                bool isRim = (x == 0 || x == 15 || y == 0 || y == 15);
+                bool isCenter = (x >= 6 && x <= 9 && y >= 6 && y <= 9);
+                if (isRim) {
+                    fusePixels[idx + 0] = 55;  // Dark industrial metal rim
+                    fusePixels[idx + 1] = 50;
+                    fusePixels[idx + 2] = 35;
+                    fusePixels[idx + 3] = 255;
+                } else if (isCenter) {
+                    fusePixels[idx + 0] = 255; // Bright electric filament core
+                    fusePixels[idx + 1] = 255;
+                    fusePixels[idx + 2] = 220;
+                    fusePixels[idx + 3] = 255;
+                } else {
+                    fusePixels[idx + 0] = 250; // Electric amber/golden yellow
+                    fusePixels[idx + 1] = 205;
+                    fusePixels[idx + 2] = 45;
+                    fusePixels[idx + 3] = 255;
+                }
+            }
+        }
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 16, 16, 0, GL_RGBA, GL_UNSIGNED_BYTE, fusePixels);
+        glGenerateMipmap(GL_TEXTURE_2D);
+    }
+
+    // 4. Closet / Locker Texture (Vintage Forest Green Steel Locker with Handle)
+    unsigned int closetTexture;
+    glGenTextures(1, &closetTexture);
+    glBindTexture(GL_TEXTURE_2D, closetTexture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    {
+        unsigned char closetPixels[16 * 16 * 4];
+        for (int y = 0; y < 16; ++y) {
+            for (int x = 0; x < 16; ++x) {
+                int idx = (y * 16 + x) * 4;
+                bool isFrame = (x == 0 || x == 15 || y == 0 || y == 15);
+                bool isSeam  = (x == 7 || x == 8);
+                bool isHandle = (x >= 5 && x <= 6 && y >= 7 && y <= 9);
+                if (isFrame) {
+                    closetPixels[idx + 0] = 25; // Dark metallic frame
+                    closetPixels[idx + 1] = 45;
+                    closetPixels[idx + 2] = 30;
+                    closetPixels[idx + 3] = 255;
+                } else if (isHandle) {
+                    closetPixels[idx + 0] = 210; // Metallic bronze latch
+                    closetPixels[idx + 1] = 180;
+                    closetPixels[idx + 2] = 85;
+                    closetPixels[idx + 3] = 255;
+                } else if (isSeam) {
+                    closetPixels[idx + 0] = 18; // Door split shadow
+                    closetPixels[idx + 1] = 32;
+                    closetPixels[idx + 2] = 22;
+                    closetPixels[idx + 3] = 255;
+                } else {
+                    closetPixels[idx + 0] = 45; // Weathered dark green locker
+                    closetPixels[idx + 1] = 88;
+                    closetPixels[idx + 2] = 58;
+                    closetPixels[idx + 3] = 255;
+                }
+            }
+        }
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 16, 16, 0, GL_RGBA, GL_UNSIGNED_BYTE, closetPixels);
+        glGenerateMipmap(GL_TEXTURE_2D);
+    }
+
     // Instantiate Software Minimap HUD
     MinimapHUD minimapHUD(200, 200);
 
@@ -617,6 +697,7 @@ int main() {
             for (int x = 0; x < mapCols; x++) {
 
                 if (houseGrid[z][x] == '1') {
+                    glBindTexture(GL_TEXTURE_2D, wallTexture);
                     glm::mat4 wallModel = glm::mat4(1.0f);
 
                     float posX = static_cast<float>(x) - mapCols * 0.5f;
@@ -632,13 +713,35 @@ int main() {
                     );
 
                     glDrawArrays(GL_TRIANGLES, 0, 36);
+                } else if (houseGrid[z][x] == 'H') {
+                    // Render 3D vintage green locker / wardrobe closet
+                    glBindTexture(GL_TEXTURE_2D, closetTexture);
+                    glm::mat4 closetModel = glm::mat4(1.0f);
+
+                    float posX = static_cast<float>(x) - mapCols * 0.5f;
+                    float posZ = static_cast<float>(z) - mapRows * 0.5f;
+
+                    closetModel = glm::translate(
+                        closetModel,
+                        glm::vec3(posX, 0.2f, posZ)
+                    );
+                    closetModel = glm::scale(
+                        closetModel,
+                        glm::vec3(0.82f, 1.4f, 0.82f)
+                    );
+
+                    glUniformMatrix4fv(
+                        modelLoc, 1, GL_FALSE, glm::value_ptr(closetModel)
+                    );
+
+                    glDrawArrays(GL_TRIANGLES, 0, 36);
                 }
             }
         }
 
-        // 2. Render floating, rotating fuse cubes
+        // 2. Render floating, rotating fuse cubes with glowing electric amber texture
         glBindVertexArray(VAO);
-        glBindTexture(GL_TEXTURE_2D, wallTexture);
+        glBindTexture(GL_TEXTURE_2D, fuseTexture);
 
         for (const auto& fuse : interactionSystem.fuses) {
 
