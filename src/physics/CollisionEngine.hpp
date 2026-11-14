@@ -37,6 +37,11 @@ public:
             centerZ + WALL_HALF_EXTENT
         };
     }
+
+    static bool overlaps(const AABB& a, const AABB& b) {
+        return a.minX < b.maxX && a.maxX > b.minX &&
+               a.minZ < b.maxZ && a.maxZ > b.minZ;
+    }
 };
 
 #endif // COLLISION_ENGINE_HPP
