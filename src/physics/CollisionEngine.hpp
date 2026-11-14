@@ -44,6 +44,8 @@ public:
     }
 
     static bool isColliding(float x, float z, const cp1::Grid& grid) {
+        if (grid.empty() || grid[0].empty()) return false;
+
         int mapRows = static_cast<int>(grid.size());
         int mapCols = static_cast<int>(grid[0].size());
         AABB playerBox = playerBoundsAt(x, z);
