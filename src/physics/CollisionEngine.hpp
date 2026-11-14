@@ -48,11 +48,20 @@ public:
         int mapCols = static_cast<int>(grid[0].size());
         AABB playerBox = playerBoundsAt(x, z);
 
-        int col = static_cast<int>(std::floor(x + mapCols * 0.5f + 0.5f));
-        int row = static_cast<int>(std::floor(z + mapRows * 0.5f + 0.5f));
-        if (cp1::cellAt(grid, col, row) == '1' &&
-            overlaps(playerBox, wallBoundsAt(col, row, mapCols, mapRows))) {
-            return true;
+        const float offsets[2] = { -PLAYER_RADIUS, PLAYER_RADIUS };
+        for (float dx : offsets) {
+            for (float dz : offsets) {
+                float testX = x + dx;
+                float testZ = z + dz;
+
+                int col = static_cast<int>(std::floor(testX + mapCols * 0.5f + 0.5f));
+                int row = static_cast<int>(std::floor(testZ + mapRows * 0.5f + 0.5f));
+
+                if (cp1::cellAt(grid, col, row) == '1' &&
+                    overlaps(playerBox, wallBoundsAt(col, row, mapCols, mapRows))) {
+                    return true;
+                }
+            }
         }
         return false;
     }
