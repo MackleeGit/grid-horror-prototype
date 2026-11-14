@@ -8,6 +8,12 @@
 
 class CollisionEngine {
 public:
+    struct AABB {
+        float minX;
+        float maxX;
+        float minZ;
+        float maxZ;
+    };
 };
 
 #endif // COLLISION_ENGINE_HPP
