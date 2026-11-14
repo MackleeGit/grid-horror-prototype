@@ -42,6 +42,20 @@ public:
         return a.minX < b.maxX && a.maxX > b.minX &&
                a.minZ < b.maxZ && a.maxZ > b.minZ;
     }
+
+    static bool isColliding(float x, float z, const cp1::Grid& grid) {
+        int mapRows = static_cast<int>(grid.size());
+        int mapCols = static_cast<int>(grid[0].size());
+        AABB playerBox = playerBoundsAt(x, z);
+
+        int col = static_cast<int>(std::floor(x + mapCols * 0.5f + 0.5f));
+        int row = static_cast<int>(std::floor(z + mapRows * 0.5f + 0.5f));
+        if (cp1::cellAt(grid, col, row) == '1' &&
+            overlaps(playerBox, wallBoundsAt(col, row, mapCols, mapRows))) {
+            return true;
+        }
+        return false;
+    }
 };
 
 #endif // COLLISION_ENGINE_HPP
