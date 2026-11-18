@@ -1,4 +1,6 @@
+
 #version 330 core
+
 out vec4 FragColor;
 
 in vec3 FragPos;
@@ -21,9 +23,13 @@ uniform float quadratic;
 uniform float ambientStrength;
 uniform float flickerFactor;
 
+// Additional visibility for selected objects, such as the monster
+uniform float emissiveStrength;
+
 void main()
 {
     vec3 texColor = texture(texture1, TexCoord).rgb;
+
     vec3 lightToFrag = normalize(lightPos - FragPos);
 
     // Minimum ambient baseline
@@ -31,15 +37,32 @@ void main()
 
     // Spotlight cone cosine calculation
     float theta = dot(lightToFrag, normalize(-lightDir));
-    float epsilon = cutOff - outerCutOff;
-    float intensity = clamp((theta - outerCutOff) / epsilon, 0.0, 1.0);
+
+    float epsilon = max(cutOff - outerCutOff, 0.0001);
+
+    float intensity = clamp(
+        (theta - outerCutOff) / epsilon,
+        0.0,
+        1.0
+    );
 
     // Distance quadratic attenuation
-    float distance = length(lightPos - FragPos);
-    float attenuation = 1.0 / (constant + linear * distance + quadratic * (distance * distance));
+    float distanceToLight = length(lightPos - FragPos);
 
-    // Combined lighting with dynamic flicker modulation
-    vec3 spotlight = texColor * intensity * attenuation * flickerFactor;
+    float attenuation = 1.0 / (
+        constant +
+        linear * distanceToLight +
+        quadratic * distanceToLight * distanceToLight
+    );
 
-    FragColor = vec4(ambient + spotlight, 1.0);
+    // Flashlight contribution
+    vec3 spotlight =
+        texColor * intensity * attenuation * flickerFactor;
+
+    // Independent visibility contribution for selected objects
+    vec3 emission = texColor * emissiveStrength;
+
+    vec3 finalColor = ambient + spotlight + emission;
+
+    FragColor = vec4(clamp(finalColor, 0.0, 1.0), 1.0);
 }

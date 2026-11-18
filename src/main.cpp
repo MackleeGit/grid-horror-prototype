@@ -4,6 +4,8 @@
 #include "Shader.hpp"
 #include "algorithms/MinimapHUD.hpp"
 #include "gameplay/InteractionSystem.hpp"
+#include "gameplay/GameState.hpp"
+#include "entity/MonsterAI.hpp"
 #include "physics/CollisionEngine.hpp"
 
 #include <GLFW/glfw3.h>
@@ -12,6 +14,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -39,8 +42,10 @@ bool pausePressedLastFrame = false;
 // Master level house layout
 cp1::Grid houseGrid = cp1::defaultHouse();
 
-// Gameplay interaction system
+// Gameplay systems
 InteractionSystem interactionSystem;
+MonsterAI monster;
+GameState gameState = GameState::PLAYING;
 
 // FPS Camera Representation
 glm::vec3 cameraPos = glm::vec3(-7.0f, 0.0f, -5.0f);
@@ -76,7 +81,7 @@ bool flashlightOn = true;
 bool fPressedLastFrame = false;
 
 // Framebuffer Callback
-void framebuffer_size_callback(GLFWwindow *window, int width, int height) {
+void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     if (width > 0 && height > 0) {
         currentWidth = width;
         currentHeight = height;
@@ -85,15 +90,18 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height) {
 }
 
 // Fullscreen Toggle
-void toggleFullscreen(GLFWwindow *window) {
+void toggleFullscreen(GLFWwindow* window) {
     isFullscreen = !isFullscreen;
+
     if (isFullscreen) {
         glfwGetWindowPos(window, &windowedPosX, &windowedPosY);
         glfwGetWindowSize(window, &windowedWidth, &windowedHeight);
 
-        GLFWmonitor *monitor = glfwGetPrimaryMonitor();
+        GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+
         if (monitor) {
-            const GLFWvidmode *mode = glfwGetVideoMode(monitor);
+            const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+
             if (mode) {
                 glfwSetWindowMonitor(
                     window, monitor, 0, 0,
@@ -111,8 +119,13 @@ void toggleFullscreen(GLFWwindow *window) {
     }
 }
 
-// Mouse Button Callback (click inside paused window to resume)
-void mouse_button_callback(GLFWwindow *window, int button, int action, int mods) {
+// Mouse Button Callback
+void mouse_button_callback(
+    GLFWwindow* window,
+    int button,
+    int action,
+    int mods
+) {
     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
         if (isPaused) {
             isPaused = false;
@@ -124,8 +137,10 @@ void mouse_button_callback(GLFWwindow *window, int button, int action, int mods)
 }
 
 // Mouse Callback
-void mouse_callback(GLFWwindow *window, double xposIn, double yposIn) {
-    if (isPaused) {
+void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
+    if (isPaused ||
+        gameState == GameState::CAUGHT ||
+        gameState == GameState::ESCAPED) {
         return;
     }
 
@@ -152,13 +167,10 @@ void mouse_callback(GLFWwindow *window, double xposIn, double yposIn) {
     yaw += xoffset;
     pitch += yoffset;
 
-    if (pitch > 89.0f)
-        pitch = 89.0f;
-
-    if (pitch < -89.0f)
-        pitch = -89.0f;
+    pitch = std::clamp(pitch, -89.0f, 89.0f);
 
     glm::vec3 direction;
+
     direction.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
     direction.y = sin(glm::radians(pitch));
     direction.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
@@ -167,7 +179,7 @@ void mouse_callback(GLFWwindow *window, double xposIn, double yposIn) {
 }
 
 // Input Processing
-void processInput(GLFWwindow *window) {
+void processInput(GLFWwindow* window) {
 
     // F11: Fullscreen Toggle
     if (glfwGetKey(window, GLFW_KEY_F11) == GLFW_PRESS) {
@@ -179,8 +191,10 @@ void processInput(GLFWwindow *window) {
         f11PressedLastFrame = false;
     }
 
-    // ESC or P: Toggle Pause & Release Mouse Cursor
-    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS) {
+    // ESC or P: Toggle Pause
+    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS ||
+        glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS) {
+
         if (!pausePressedLastFrame) {
             isPaused = !isPaused;
             pausePressedLastFrame = true;
@@ -189,7 +203,7 @@ void processInput(GLFWwindow *window) {
                 glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
                 glfwSetWindowTitle(
                     window,
-                    "3D Survival Horror Application - [PAUSED] (Click or Press ESC/P to Resume, F11 for Fullscreen, Q to Quit)"
+                    "3D Survival Horror Application - [PAUSED]"
                 );
             } else {
                 glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -201,12 +215,18 @@ void processInput(GLFWwindow *window) {
         pausePressedLastFrame = false;
     }
 
-    // When paused, pressing Q will exit the application cleanly
+    // When paused, Q exits the application.
     if (isPaused) {
         if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
             glfwSetWindowShouldClose(window, true);
         }
-        return; // Halt player movement while paused
+        return;
+    }
+
+    // Stop gameplay input after a terminal state.
+    if (gameState == GameState::CAUGHT ||
+        gameState == GameState::ESCAPED) {
+        return;
     }
 
     // F3: Toggle debug telemetry
@@ -214,10 +234,6 @@ void processInput(GLFWwindow *window) {
         if (!f3PressedLastFrame) {
             showDebugTelemetry = !showDebugTelemetry;
             f3PressedLastFrame = true;
-
-            if (!showDebugTelemetry) {
-                glfwSetWindowTitle(window, "3D Survival Horror Application");
-            }
         }
     } else {
         f3PressedLastFrame = false;
@@ -243,7 +259,7 @@ void processInput(GLFWwindow *window) {
         ePressedLastFrame = false;
     }
 
-    // F: Toggle Flashlight Spotlight / Bright Work-Light Mode
+    // F: Toggle flashlight
     if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS) {
         if (!fPressedLastFrame) {
             flashlightOn = !flashlightOn;
@@ -271,10 +287,9 @@ void processInput(GLFWwindow *window) {
     isSprinting = shiftPressed && !ctrlPressed && movementInput;
     isCrouching = ctrlPressed && movementInput;
 
-    // Hiding prevents movement and therefore prevents movement footprints.
+    // Hiding prevents movement.
     isMoving = movementInput && !interactionSystem.isPlayerHidden;
 
-    // Hiding locks player movement.
     if (!interactionSystem.isPlayerHidden) {
 
         float movementSpeed = 2.5f;
@@ -287,7 +302,6 @@ void processInput(GLFWwindow *window) {
 
         float cameraSpeed = movementSpeed * deltaTime;
 
-        // Keep movement on the horizontal XZ plane.
         glm::vec3 horizontalFront(
             cameraFront.x,
             0.0f,
@@ -315,27 +329,36 @@ void processInput(GLFWwindow *window) {
         if (right)
             movement += rightDirection;
 
-        // Normalize diagonal movement and resolve wall collisions with sliding physics.
         if (glm::length(movement) > 0.0f) {
             movement = glm::normalize(movement);
+
             glm::vec3 deltaMovement = movement * cameraSpeed;
-            cameraPos = CollisionEngine::resolveMovement(cameraPos, deltaMovement, houseGrid);
+
+            cameraPos = CollisionEngine::resolveMovement(
+                cameraPos,
+                deltaMovement,
+                houseGrid
+            );
         }
     }
 
-    // Lock eye height.
     cameraPos.y = 0.0f;
 }
 
 int main() {
 
-    // Register the three fuse objectives from the house grid.
+    // Register the three fuse objectives.
     interactionSystem.initialize(houseGrid);
 
-    // CP1 pure C++ geometry demos
+    // Initialize monster patrol position.
+    monster.initialize(1.0f, -5.0f);
+
+    std::cout << "[MONSTER] Monster AI initialized.\n";
+
+    // CP1 geometry demos
     cp1::runGeometryDemo();
 
-    // Export static minimap HUD frame showing all five algorithms.
+    // Export static minimap evidence.
     {
         MinimapHUD demoHUD(200, 200);
 
@@ -353,7 +376,7 @@ int main() {
     }
 
     if (!glfwInit()) {
-        std::cerr << "Failed to initialize GLFW" << std::endl;
+        std::cerr << "Failed to initialize GLFW\n";
         return -1;
     }
 
@@ -361,7 +384,7 @@ int main() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    GLFWwindow *window = glfwCreateWindow(
+    GLFWwindow* window = glfwCreateWindow(
         SCR_WIDTH,
         SCR_HEIGHT,
         "3D Survival Horror Application",
@@ -370,18 +393,21 @@ int main() {
     );
 
     if (!window) {
-        std::cerr << "Failed to create GLFW window" << std::endl;
+        std::cerr << "Failed to create GLFW window\n";
         glfwTerminate();
         return -1;
     }
 
-    // Center window on primary monitor
-    GLFWmonitor *primaryMonitor = glfwGetPrimaryMonitor();
+    // Center window on primary monitor.
+    GLFWmonitor* primaryMonitor = glfwGetPrimaryMonitor();
+
     if (primaryMonitor) {
-        const GLFWvidmode *mode = glfwGetVideoMode(primaryMonitor);
+        const GLFWvidmode* mode = glfwGetVideoMode(primaryMonitor);
+
         if (mode) {
             int posX = (mode->width - static_cast<int>(SCR_WIDTH)) / 2;
             int posY = (mode->height - static_cast<int>(SCR_HEIGHT)) / 2;
+
             glfwSetWindowPos(window, posX, posY);
         }
     }
@@ -396,42 +422,41 @@ int main() {
 
     // GLAD Runtime Loader
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
-        std::cerr << "Failed to initialize GLAD" << std::endl;
+        std::cerr << "Failed to initialize GLAD\n";
+        glfwTerminate();
         return -1;
     }
 
-    // Depth Testing
     glEnable(GL_DEPTH_TEST);
 
     Shader sceneShader("shaders/scene.vert", "shaders/scene.frag");
     Shader hudShader("shaders/hud.vert", "shaders/hud.frag");
 
-    // Wall cube geometry — 36 vertices, 6 faces
+    // Wall cube geometry
     float vertices[] = {
-        // positions          // texture coords
-        -0.5f, -0.5f, -0.5f, 0.0f, 0.0f, 0.5f,  -0.5f, -0.5f, 1.0f, 0.0f,
-        0.5f,  0.5f,  -0.5f, 1.0f, 1.0f, 0.5f,  0.5f,  -0.5f, 1.0f, 1.0f,
-        -0.5f, 0.5f,  -0.5f, 0.0f, 1.0f, -0.5f, -0.5f, -0.5f, 0.0f, 0.0f,
+        -0.5f,-0.5f,-0.5f,0.0f,0.0f,  0.5f,-0.5f,-0.5f,1.0f,0.0f,
+         0.5f, 0.5f,-0.5f,1.0f,1.0f,  0.5f, 0.5f,-0.5f,1.0f,1.0f,
+        -0.5f, 0.5f,-0.5f,0.0f,1.0f, -0.5f,-0.5f,-0.5f,0.0f,0.0f,
 
-        -0.5f, -0.5f, 0.5f,  0.0f, 0.0f, 0.5f,  -0.5f, 0.5f,  1.0f, 0.0f,
-        0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
-        -0.5f, 0.5f,  0.5f,  0.0f, 1.0f, -0.5f, -0.5f, 0.5f,  0.0f, 0.0f,
+        -0.5f,-0.5f, 0.5f,0.0f,0.0f,  0.5f,-0.5f, 0.5f,1.0f,0.0f,
+         0.5f, 0.5f, 0.5f,1.0f,1.0f,  0.5f, 0.5f, 0.5f,1.0f,1.0f,
+        -0.5f, 0.5f, 0.5f,0.0f,1.0f, -0.5f,-0.5f, 0.5f,0.0f,0.0f,
 
-        -0.5f, 0.5f,  0.5f,  1.0f, 0.0f, -0.5f, 0.5f,  -0.5f, 1.0f, 1.0f,
-        -0.5f, -0.5f, -0.5f, 0.0f, 1.0f, -0.5f, -0.5f, -0.5f, 0.0f, 1.0f,
-        -0.5f, -0.5f, 0.5f,  0.0f, 0.0f, -0.5f, 0.5f,  0.5f,  1.0f, 0.0f,
+        -0.5f, 0.5f, 0.5f,1.0f,0.0f, -0.5f, 0.5f,-0.5f,1.0f,1.0f,
+        -0.5f,-0.5f,-0.5f,0.0f,1.0f, -0.5f,-0.5f,-0.5f,0.0f,1.0f,
+        -0.5f,-0.5f, 0.5f,0.0f,0.0f, -0.5f, 0.5f, 0.5f,1.0f,0.0f,
 
-        0.5f,  0.5f,  0.5f,  1.0f, 0.0f, 0.5f,  0.5f,  -0.5f, 1.0f, 1.0f,
-        0.5f,  -0.5f, -0.5f, 0.0f, 1.0f, 0.5f,  -0.5f, -0.5f, 0.0f, 1.0f,
-        0.5f,  -0.5f, 0.5f,  0.0f, 0.0f, 0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+         0.5f, 0.5f, 0.5f,1.0f,0.0f,  0.5f, 0.5f,-0.5f,1.0f,1.0f,
+         0.5f,-0.5f,-0.5f,0.0f,1.0f,  0.5f,-0.5f,-0.5f,0.0f,1.0f,
+         0.5f,-0.5f, 0.5f,0.0f,0.0f,  0.5f, 0.5f, 0.5f,1.0f,0.0f,
 
-        -0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 0.5f,  -0.5f, -0.5f, 1.0f, 1.0f,
-        0.5f,  -0.5f, 0.5f,  1.0f, 0.0f, 0.5f,  -0.5f, 0.5f,  1.0f, 0.0f,
-        -0.5f, -0.5f, 0.5f,  0.0f, 0.0f, -0.5f, -0.5f, -0.5f, 0.0f, 1.0f,
+        -0.5f,-0.5f,-0.5f,0.0f,1.0f,  0.5f,-0.5f,-0.5f,1.0f,1.0f,
+         0.5f,-0.5f, 0.5f,1.0f,0.0f,  0.5f,-0.5f, 0.5f,1.0f,0.0f,
+        -0.5f,-0.5f, 0.5f,0.0f,0.0f, -0.5f,-0.5f,-0.5f,0.0f,1.0f,
 
-        -0.5f, 0.5f,  -0.5f, 0.0f, 1.0f, 0.5f,  0.5f,  -0.5f, 1.0f, 1.0f,
-        0.5f,  0.5f,  0.5f,  1.0f, 0.0f, 0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-        -0.5f, 0.5f,  0.5f,  0.0f, 0.0f, -0.5f, 0.5f,  -0.5f, 0.0f, 1.0f
+        -0.5f, 0.5f,-0.5f,0.0f,1.0f,  0.5f, 0.5f,-0.5f,1.0f,1.0f,
+         0.5f, 0.5f, 0.5f,1.0f,0.0f,  0.5f, 0.5f, 0.5f,1.0f,0.0f,
+        -0.5f, 0.5f, 0.5f,0.0f,0.0f, -0.5f, 0.5f,-0.5f,0.0f,1.0f
     };
 
     unsigned int VBO, VAO;
@@ -444,22 +469,22 @@ int main() {
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
     glVertexAttribPointer(
-        0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)0
+        0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0
     );
     glEnableVertexAttribArray(0);
 
     glVertexAttribPointer(
         1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float),
-        (void *)(3 * sizeof(float))
+        (void*)(3 * sizeof(float))
     );
     glEnableVertexAttribArray(1);
 
-    // Floor Geometry (EBO)
+    // Floor Geometry
     float floorVertices[] = {
-        -8.5f, -0.5f, -6.5f, 0.0f, 12.0f,
-        8.5f, -0.5f, -6.5f, 16.0f, 12.0f,
-        8.5f, -0.5f, 6.5f, 16.0f, 0.0f,
-        -8.5f, -0.5f, 6.5f, 0.0f, 0.0f
+        -8.5f,-0.5f,-6.5f,0.0f,12.0f,
+         8.5f,-0.5f,-6.5f,16.0f,12.0f,
+         8.5f,-0.5f, 6.5f,16.0f,0.0f,
+        -8.5f,-0.5f, 6.5f,0.0f,0.0f
     };
 
     unsigned int floorIndices[] = {0, 1, 2, 2, 3, 0};
@@ -490,24 +515,21 @@ int main() {
     );
 
     glVertexAttribPointer(
-        0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)0
+        0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0
     );
     glEnableVertexAttribArray(0);
 
     glVertexAttribPointer(
         1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float),
-        (void *)(3 * sizeof(float))
+        (void*)(3 * sizeof(float))
     );
     glEnableVertexAttribArray(1);
 
-    // HUD quad — top-right corner, screen space NDC coords
+    // HUD quad
     float hudQuadVertices[] = {
-        // positions   // texture coords (V inverted for OpenGL texture alignment)
-        0.45f, 0.95f, 0.0f,  0.0f,  0.95f, 0.95f,
-        1.0f,  0.0f,  0.95f, 0.45f, 1.0f,  1.0f,
-
-        0.45f, 0.95f, 0.0f,  0.0f,  0.95f, 0.45f,
-        1.0f,  1.0f,  0.45f, 0.45f, 0.0f,  1.0f
+        0.45f,0.95f,0.0f,0.0f, 0.95f,0.95f,1.0f,0.0f,
+        0.95f,0.45f,1.0f,1.0f, 0.45f,0.95f,0.0f,0.0f,
+        0.95f,0.45f,1.0f,1.0f, 0.45f,0.45f,0.0f,1.0f
     };
 
     unsigned int hudVAO, hudVBO;
@@ -526,17 +548,17 @@ int main() {
     );
 
     glVertexAttribPointer(
-        0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *)0
+        0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0
     );
     glEnableVertexAttribArray(0);
 
     glVertexAttribPointer(
         1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float),
-        (void *)(2 * sizeof(float))
+        (void*)(2 * sizeof(float))
     );
     glEnableVertexAttribArray(1);
 
-    // Textures — try to load from file, fall back to a procedural pattern
+    // Texture setup
     stbi_set_flip_vertically_on_load(true);
 
     int width, height, nrChannels;
@@ -549,11 +571,10 @@ int main() {
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
-                    GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-    unsigned char *wallData =
+    unsigned char* wallData =
         stbi_load("assets/textures/wall.png", &width, &height, &nrChannels, 0);
 
     if (wallData) {
@@ -566,9 +587,7 @@ int main() {
 
         glGenerateMipmap(GL_TEXTURE_2D);
         stbi_image_free(wallData);
-
     } else {
-        // Procedural Dark Brick Wall Texture (16x16 pixels)
         unsigned char brickPixels[16 * 16 * 4];
 
         for (int y = 0; y < 16; ++y) {
@@ -581,17 +600,10 @@ int main() {
                         ? (x % 8 == 0)
                         : ((x + 4) % 8 == 0));
 
-                if (isMortar) {
-                    brickPixels[index + 0] = 40;
-                    brickPixels[index + 1] = 42;
-                    brickPixels[index + 2] = 45;
-                    brickPixels[index + 3] = 255;
-                } else {
-                    brickPixels[index + 0] = 95;
-                    brickPixels[index + 1] = 55;
-                    brickPixels[index + 2] = 50;
-                    brickPixels[index + 3] = 255;
-                }
+                brickPixels[index + 0] = isMortar ? 40 : 95;
+                brickPixels[index + 1] = isMortar ? 42 : 55;
+                brickPixels[index + 2] = isMortar ? 45 : 50;
+                brickPixels[index + 3] = 255;
             }
         }
 
@@ -611,11 +623,10 @@ int main() {
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
-                    GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-    unsigned char *floorData =
+    unsigned char* floorData =
         stbi_load("assets/textures/floor.png", &width, &height, &nrChannels, 0);
 
     if (floorData) {
@@ -628,9 +639,7 @@ int main() {
 
         glGenerateMipmap(GL_TEXTURE_2D);
         stbi_image_free(floorData);
-
     } else {
-        // Procedural Dark Stone Tile Floor Texture (16x16 pixels)
         unsigned char tilePixels[16 * 16 * 4];
 
         for (int y = 0; y < 16; ++y) {
@@ -639,17 +648,10 @@ int main() {
 
                 bool isGrout = (x % 8 == 0) || (y % 8 == 0);
 
-                if (isGrout) {
-                    tilePixels[index + 0] = 20;
-                    tilePixels[index + 1] = 22;
-                    tilePixels[index + 2] = 25;
-                    tilePixels[index + 3] = 255;
-                } else {
-                    tilePixels[index + 0] = 50;
-                    tilePixels[index + 1] = 60;
-                    tilePixels[index + 2] = 70;
-                    tilePixels[index + 3] = 255;
-                }
+                tilePixels[index + 0] = isGrout ? 20 : 50;
+                tilePixels[index + 1] = isGrout ? 22 : 60;
+                tilePixels[index + 2] = isGrout ? 25 : 70;
+                tilePixels[index + 3] = 255;
             }
         }
 
@@ -661,87 +663,141 @@ int main() {
         glGenerateMipmap(GL_TEXTURE_2D);
     }
 
-    // 3. Fuse Collectible Texture (Glowing Golden Amber / Electric Yellow)
+    // 3. Fuse Texture
     unsigned int fuseTexture;
+
     glGenTextures(1, &fuseTexture);
     glBindTexture(GL_TEXTURE_2D, fuseTexture);
+
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
     {
         unsigned char fusePixels[16 * 16 * 4];
+
         for (int y = 0; y < 16; ++y) {
             for (int x = 0; x < 16; ++x) {
                 int idx = (y * 16 + x) * 4;
+
                 bool isRim = (x == 0 || x == 15 || y == 0 || y == 15);
                 bool isCenter = (x >= 6 && x <= 9 && y >= 6 && y <= 9);
+
                 if (isRim) {
-                    fusePixels[idx + 0] = 55;  // Dark industrial metal rim
+                    fusePixels[idx + 0] = 55;
                     fusePixels[idx + 1] = 50;
                     fusePixels[idx + 2] = 35;
-                    fusePixels[idx + 3] = 255;
                 } else if (isCenter) {
-                    fusePixels[idx + 0] = 255; // Bright electric filament core
+                    fusePixels[idx + 0] = 255;
                     fusePixels[idx + 1] = 255;
                     fusePixels[idx + 2] = 220;
-                    fusePixels[idx + 3] = 255;
                 } else {
-                    fusePixels[idx + 0] = 250; // Electric amber/golden yellow
+                    fusePixels[idx + 0] = 250;
                     fusePixels[idx + 1] = 205;
                     fusePixels[idx + 2] = 45;
-                    fusePixels[idx + 3] = 255;
                 }
+
+                fusePixels[idx + 3] = 255;
             }
         }
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 16, 16, 0, GL_RGBA, GL_UNSIGNED_BYTE, fusePixels);
+
+        glTexImage2D(
+            GL_TEXTURE_2D, 0, GL_RGBA, 16, 16, 0,
+            GL_RGBA, GL_UNSIGNED_BYTE, fusePixels
+        );
+
         glGenerateMipmap(GL_TEXTURE_2D);
     }
 
-    // 4. Closet / Locker Texture (Vintage Forest Green Steel Locker with Handle)
+    // 4. Closet Texture
     unsigned int closetTexture;
+
     glGenTextures(1, &closetTexture);
     glBindTexture(GL_TEXTURE_2D, closetTexture);
+
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
     {
         unsigned char closetPixels[16 * 16 * 4];
+
         for (int y = 0; y < 16; ++y) {
             for (int x = 0; x < 16; ++x) {
                 int idx = (y * 16 + x) * 4;
+
                 bool isFrame = (x == 0 || x == 15 || y == 0 || y == 15);
-                bool isSeam  = (x == 7 || x == 8);
+                bool isSeam = (x == 7 || x == 8);
                 bool isHandle = (x >= 5 && x <= 6 && y >= 7 && y <= 9);
+
                 if (isFrame) {
-                    closetPixels[idx + 0] = 25; // Dark metallic frame
+                    closetPixels[idx + 0] = 25;
                     closetPixels[idx + 1] = 45;
                     closetPixels[idx + 2] = 30;
-                    closetPixels[idx + 3] = 255;
                 } else if (isHandle) {
-                    closetPixels[idx + 0] = 210; // Metallic bronze latch
+                    closetPixels[idx + 0] = 210;
                     closetPixels[idx + 1] = 180;
                     closetPixels[idx + 2] = 85;
-                    closetPixels[idx + 3] = 255;
                 } else if (isSeam) {
-                    closetPixels[idx + 0] = 18; // Door split shadow
+                    closetPixels[idx + 0] = 18;
                     closetPixels[idx + 1] = 32;
                     closetPixels[idx + 2] = 22;
-                    closetPixels[idx + 3] = 255;
                 } else {
-                    closetPixels[idx + 0] = 45; // Weathered dark green locker
+                    closetPixels[idx + 0] = 45;
                     closetPixels[idx + 1] = 88;
                     closetPixels[idx + 2] = 58;
-                    closetPixels[idx + 3] = 255;
                 }
+
+                closetPixels[idx + 3] = 255;
             }
         }
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 16, 16, 0, GL_RGBA, GL_UNSIGNED_BYTE, closetPixels);
+
+        glTexImage2D(
+            GL_TEXTURE_2D, 0, GL_RGBA, 16, 16, 0,
+            GL_RGBA, GL_UNSIGNED_BYTE, closetPixels
+        );
+
         glGenerateMipmap(GL_TEXTURE_2D);
     }
 
-    // Instantiate Software Minimap HUD
+    // 5. Monster Texture: dark crimson skin
+    unsigned int monsterTexture;
+
+    glGenTextures(1, &monsterTexture);
+    glBindTexture(GL_TEXTURE_2D, monsterTexture);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    {
+        unsigned char monsterPixels[16 * 16 * 4];
+
+        for (int y = 0; y < 16; ++y) {
+            for (int x = 0; x < 16; ++x) {
+                int idx = (y * 16 + x) * 4;
+
+                bool darkPatch = ((x + y) % 5 == 0);
+
+                monsterPixels[idx + 0] = darkPatch ? 45 : 125;
+                monsterPixels[idx + 1] = darkPatch ? 8 : 18;
+                monsterPixels[idx + 2] = darkPatch ? 12 : 28;
+                monsterPixels[idx + 3] = 255;
+            }
+        }
+
+        glTexImage2D(
+            GL_TEXTURE_2D, 0, GL_RGBA, 16, 16, 0,
+            GL_RGBA, GL_UNSIGNED_BYTE, monsterPixels
+        );
+
+        glGenerateMipmap(GL_TEXTURE_2D);
+    }
+
+    // Instantiate software minimap HUD
     MinimapHUD minimapHUD(200, 200);
 
     // Main Render Loop
@@ -753,15 +809,42 @@ int main() {
         lastFrame = currentFrame;
 
         if (isPaused) {
-            deltaTime = 0.0f; // Prevent accumulator delta spike upon unpausing
+            deltaTime = 0.0f;
         }
 
         processInput(window);
 
+        // Update monster AI.
+        if (!isPaused &&
+            gameState != GameState::CAUGHT &&
+            gameState != GameState::ESCAPED) {
+
+            gameState = monster.update(
+                deltaTime,
+                cameraPos,
+                interactionSystem.isPlayerHidden,
+                interactionSystem.allFusesCollected(),
+                houseGrid
+            );
+        }
+
+        // Game state window title.
+        if (gameState == GameState::CAUGHT) {
+            glfwSetWindowTitle(
+                window,
+                "GAME OVER - The monster caught you! (ESC to pause, Q to quit)"
+            );
+        } else if (gameState == GameState::ESCAPED) {
+            glfwSetWindowTitle(
+                window,
+                "YOU ESCAPED! - The house is restored!"
+            );
+        }
+
         glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // 1. Render 3D Scene Geometry
+        // 1. Render 3D Scene
         glEnable(GL_DEPTH_TEST);
         sceneShader.use();
 
@@ -769,16 +852,15 @@ int main() {
             glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
 
         float aspect = (currentHeight > 0)
-            ? (static_cast<float>(currentWidth) / static_cast<float>(currentHeight))
-            : (16.0f / 9.0f);
+            ? static_cast<float>(currentWidth) / static_cast<float>(currentHeight)
+            : 16.0f / 9.0f;
 
-        glm::mat4 projection =
-            glm::perspective(
-                glm::radians(45.0f),
-                aspect,
-                0.1f,
-                100.0f
-            );
+        glm::mat4 projection = glm::perspective(
+            glm::radians(45.0f),
+            aspect,
+            0.1f,
+            100.0f
+        );
 
         int modelLoc = glGetUniformLocation(sceneShader.ID, "model");
         int viewLoc = glGetUniformLocation(sceneShader.ID, "view");
@@ -787,36 +869,95 @@ int main() {
         glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
 
-        // Flashlight / Spotlight Lighting Uniforms
-        glUniform3fv(glGetUniformLocation(sceneShader.ID, "lightPos"), 1, glm::value_ptr(cameraPos));
-        glUniform3fv(glGetUniformLocation(sceneShader.ID, "lightDir"), 1, glm::value_ptr(cameraFront));
+        // Flashlight / spotlight uniforms
+        glUniform3fv(
+            glGetUniformLocation(sceneShader.ID, "lightPos"),
+            1,
+            glm::value_ptr(cameraPos)
+        );
+
+        glUniform3fv(
+            glGetUniformLocation(sceneShader.ID, "lightDir"),
+            1,
+            glm::value_ptr(cameraFront)
+        );
+
+        float flickerFactor = flashlightOn
+            ? monster.getProximityFlicker(cameraPos, currentFrame)
+            : 1.0f;
 
         if (flashlightOn) {
-            // Horror Spotlight Mode: Comfortable wide beam, ambient visibility, steady beam
-            glUniform1f(glGetUniformLocation(sceneShader.ID, "cutOff"), std::cos(glm::radians(18.0f)));
-            glUniform1f(glGetUniformLocation(sceneShader.ID, "outerCutOff"), std::cos(glm::radians(26.0f)));
-            glUniform1f(glGetUniformLocation(sceneShader.ID, "constant"), 1.0f);
-            glUniform1f(glGetUniformLocation(sceneShader.ID, "linear"), 0.05f);
-            glUniform1f(glGetUniformLocation(sceneShader.ID, "quadratic"), 0.015f);
-            glUniform1f(glGetUniformLocation(sceneShader.ID, "ambientStrength"), 0.20f);
-            glUniform1f(glGetUniformLocation(sceneShader.ID, "flickerFactor"), 1.0f);
-        } else {
-            // Full Visibility Mode: High ambient fill across the entire level
-            glUniform1f(glGetUniformLocation(sceneShader.ID, "cutOff"), std::cos(glm::radians(85.0f)));
-            glUniform1f(glGetUniformLocation(sceneShader.ID, "outerCutOff"), std::cos(glm::radians(89.0f)));
-            glUniform1f(glGetUniformLocation(sceneShader.ID, "constant"), 1.0f);
-            glUniform1f(glGetUniformLocation(sceneShader.ID, "linear"), 0.01f);
-            glUniform1f(glGetUniformLocation(sceneShader.ID, "quadratic"), 0.005f);
-            glUniform1f(glGetUniformLocation(sceneShader.ID, "ambientStrength"), 0.85f);
-            glUniform1f(glGetUniformLocation(sceneShader.ID, "flickerFactor"), 1.0f);
-        }
+            glUniform1f(
+                glGetUniformLocation(sceneShader.ID, "cutOff"),
+                std::cos(glm::radians(18.0f))
+            );
 
-        // Draw Floor with Floor Texture
+            glUniform1f(
+                glGetUniformLocation(sceneShader.ID, "outerCutOff"),
+                std::cos(glm::radians(26.0f))
+            );
+
+            glUniform1f(
+                glGetUniformLocation(sceneShader.ID, "constant"), 1.0f
+            );
+
+            glUniform1f(
+                glGetUniformLocation(sceneShader.ID, "linear"), 0.05f
+            );
+
+            glUniform1f(
+                glGetUniformLocation(sceneShader.ID, "quadratic"), 0.015f
+            );
+
+            glUniform1f(
+                glGetUniformLocation(sceneShader.ID, "ambientStrength"), 0.20f
+            );
+
+            glUniform1f(
+                glGetUniformLocation(sceneShader.ID, "flickerFactor"),
+                flickerFactor
+            );
+        } else {
+            glUniform1f(
+                glGetUniformLocation(sceneShader.ID, "cutOff"),
+                std::cos(glm::radians(85.0f))
+            );
+
+            glUniform1f(
+                glGetUniformLocation(sceneShader.ID, "outerCutOff"),
+                std::cos(glm::radians(89.0f))
+            );
+
+            glUniform1f(
+                glGetUniformLocation(sceneShader.ID, "constant"), 1.0f
+            );
+
+            glUniform1f(
+                glGetUniformLocation(sceneShader.ID, "linear"), 0.01f
+            );
+
+            glUniform1f(
+                glGetUniformLocation(sceneShader.ID, "quadratic"), 0.005f
+            );
+
+            glUniform1f(
+                glGetUniformLocation(sceneShader.ID, "ambientStrength"), 0.85f
+            );
+
+            glUniform1f(
+                glGetUniformLocation(sceneShader.ID, "flickerFactor"), 1.0f
+            );
+            glUniform1f(
+                glGetUniformLocation(sceneShader.ID, "emissiveStrength"),0.0f
+            );
+        }
+          
+        // Draw Floor
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, floorTexture);
         glBindVertexArray(floorVAO);
 
-        glm::mat4 floorModel = glm::mat4(1.0f);
+        glm::mat4 floorModel(1.0f);
 
         glUniformMatrix4fv(
             modelLoc, 1, GL_FALSE, glm::value_ptr(floorModel)
@@ -824,19 +965,19 @@ int main() {
 
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
-        // Draw Walls with Wall Texture
-        glBindTexture(GL_TEXTURE_2D, wallTexture);
+        // Draw walls and closets
         glBindVertexArray(VAO);
 
         int mapRows = static_cast<int>(houseGrid.size());
         int mapCols = static_cast<int>(houseGrid[0].size());
 
-        for (int z = 0; z < mapRows; z++) {
-            for (int x = 0; x < mapCols; x++) {
+        for (int z = 0; z < mapRows; ++z) {
+            for (int x = 0; x < mapCols; ++x) {
 
                 if (houseGrid[z][x] == '1') {
                     glBindTexture(GL_TEXTURE_2D, wallTexture);
-                    glm::mat4 wallModel = glm::mat4(1.0f);
+
+                    glm::mat4 wallModel(1.0f);
 
                     float posX = static_cast<float>(x) - mapCols * 0.5f;
                     float posZ = static_cast<float>(z) - mapRows * 0.5f;
@@ -852,9 +993,9 @@ int main() {
 
                     glDrawArrays(GL_TRIANGLES, 0, 36);
                 } else if (houseGrid[z][x] == 'H') {
-                    // Render 3D vintage green locker / wardrobe closet
                     glBindTexture(GL_TEXTURE_2D, closetTexture);
-                    glm::mat4 closetModel = glm::mat4(1.0f);
+
+                    glm::mat4 closetModel(1.0f);
 
                     float posX = static_cast<float>(x) - mapCols * 0.5f;
                     float posZ = static_cast<float>(z) - mapRows * 0.5f;
@@ -863,6 +1004,7 @@ int main() {
                         closetModel,
                         glm::vec3(posX, 0.2f, posZ)
                     );
+
                     closetModel = glm::scale(
                         closetModel,
                         glm::vec3(0.82f, 1.4f, 0.82f)
@@ -877,13 +1019,12 @@ int main() {
             }
         }
 
-        // 2. Render floating, rotating fuse cubes with glowing electric amber texture
+        // 2. Render uncollected fuses
         glBindVertexArray(VAO);
         glBindTexture(GL_TEXTURE_2D, fuseTexture);
 
         for (const auto& fuse : interactionSystem.fuses) {
 
-            // Do not render collected fuses.
             if (fuse.collected) {
                 continue;
             }
@@ -916,17 +1057,136 @@ int main() {
             );
 
             glUniformMatrix4fv(
-                modelLoc,
-                1,
-                GL_FALSE,
-                glm::value_ptr(fuseModel)
+                modelLoc, 1, GL_FALSE, glm::value_ptr(fuseModel)
             );
 
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
 
-        // 3. Render minimap HUD and acoustic footprints
-        if (showMinimapHUD) {
+        // 3. Render Monster
+        
+        // 3. Render Monster
+        glBindVertexArray(VAO);
+        glBindTexture(GL_TEXTURE_2D, monsterTexture);
+
+        glm::vec3 monsterPos = monster.position;
+
+        // Give the monster independent visibility.
+        glUniform1f(
+            glGetUniformLocation(sceneShader.ID, "emissiveStrength"),
+            0.55f
+        );
+
+        // Body
+        glm::mat4 monsterBody(1.0f);
+
+        monsterBody = glm::translate(
+            monsterBody,
+            glm::vec3(monsterPos.x, 0.5f, monsterPos.z)
+        );
+
+        monsterBody = glm::scale(
+            monsterBody,
+            glm::vec3(0.65f, 0.9f, 0.48f)
+        );
+
+        glUniformMatrix4fv(
+            modelLoc, 1, GL_FALSE, glm::value_ptr(monsterBody)
+        );
+
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+
+        // Head
+        glm::mat4 monsterHead(1.0f);
+
+        monsterHead = glm::translate(
+            monsterHead,
+            glm::vec3(monsterPos.x, 1.2f, monsterPos.z)
+        );
+
+        monsterHead = glm::scale(
+            monsterHead,
+            glm::vec3(0.48f, 0.48f, 0.48f)
+        );
+
+        glUniformMatrix4fv(
+            modelLoc, 1, GL_FALSE, glm::value_ptr(monsterHead)
+        );
+
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+
+        // Arms
+        for (int side : {-1, 1}) {
+            glm::mat4 armModel(1.0f);
+
+            armModel = glm::translate(
+                armModel,
+                glm::vec3(
+                    monsterPos.x + side * 0.48f,
+                    0.5f,
+                    monsterPos.z
+                )
+            );
+
+            armModel = glm::rotate(
+                armModel,
+                glm::radians(side * 12.0f),
+                glm::vec3(0.0f, 0.0f, 1.0f)
+            );
+
+            armModel = glm::scale(
+                armModel,
+                glm::vec3(0.22f, 0.8f, 0.25f)
+            );
+
+            glUniformMatrix4fv(
+                modelLoc, 1, GL_FALSE, glm::value_ptr(armModel)
+            );
+
+            glDrawArrays(GL_TRIANGLES, 0, 36);
+        }
+
+        // Glowing eyes
+        glBindTexture(GL_TEXTURE_2D, fuseTexture);
+
+        glUniform1f(
+            glGetUniformLocation(sceneShader.ID, "emissiveStrength"),
+            1.2f
+        );
+
+        for (int side : {-1, 1}) {
+            glm::mat4 eyeModel(1.0f);
+
+            eyeModel = glm::translate(
+                eyeModel,
+                glm::vec3(
+                    monsterPos.x + side * 0.12f,
+                    1.25f,
+                    monsterPos.z - 0.245f
+                )
+            );
+
+            eyeModel = glm::scale(
+                eyeModel,
+                glm::vec3(0.09f, 0.07f, 0.035f)
+            );
+
+            glUniformMatrix4fv(
+                modelLoc, 1, GL_FALSE, glm::value_ptr(eyeModel)
+            );
+
+            glDrawArrays(GL_TRIANGLES, 0, 36);
+        }
+
+        // Restore normal lighting for subsequent objects.
+        glUniform1f(
+            glGetUniformLocation(sceneShader.ID, "emissiveStrength"),
+            0.0f
+        );
+
+
+        // 4. Render minimap HUD and acoustic footprints
+         if (showMinimapHUD) {
 
             minimapHUD.render(
                 cameraPos.x,
@@ -936,7 +1196,10 @@ int main() {
                 houseGrid,
                 true,
                 isSprinting,
-                isCrouching
+                isCrouching,
+                monster.position.x,
+                monster.position.z,
+                monster.mode == MonsterMode::CHASE
             );
 
             glDisable(GL_DEPTH_TEST);
@@ -960,24 +1223,30 @@ int main() {
         }
 
         // Debug telemetry
-        if (showDebugTelemetry) {
-            char title[160];
+        if (showDebugTelemetry &&
+            gameState != GameState::CAUGHT &&
+            gameState != GameState::ESCAPED) {
 
-            int fps =
-                (deltaTime > 0.0f)
-                    ? static_cast<int>(1.0f / deltaTime)
-                    : 0;
+            char title[200];
+
+            int fps = (deltaTime > 0.0f)
+                ? static_cast<int>(1.0f / deltaTime)
+                : 0;
 
             const char* playerState =
                 interactionSystem.isPlayerHidden ? "HIDDEN" : "VISIBLE";
 
+            const char* monsterState =
+                monster.mode == MonsterMode::CHASE ? "CHASE" : "PATROL";
+
             std::snprintf(
                 title,
                 sizeof(title),
-                "3D Survival Horror Application | Fuses: %d/3 | %s | "
+                "Echoes in the Dark | Fuses: %d/3 | %s | Monster: %s | "
                 "Pos: (%.2f, %.2f, %.2f) | FPS: %d",
                 interactionSystem.fusesCollected,
                 playerState,
+                monsterState,
                 cameraPos.x,
                 cameraPos.y,
                 cameraPos.z,
@@ -987,13 +1256,15 @@ int main() {
             glfwSetWindowTitle(window, title);
         }
 
-        // Automatic Checkpoint 1 evidence screenshot capture on frame 5
+        // Automatic Checkpoint 1 screenshot capture on frame 5
         static int screenshotFrame = 0;
 
         if (++screenshotFrame == 5) {
             SoftwareCanvas screenCanvas(currentWidth, currentHeight);
 
-            std::vector<uint8_t> glPixels(currentWidth * currentHeight * 3);
+            std::vector<uint8_t> glPixels(
+                currentWidth * currentHeight * 3
+            );
 
             glReadPixels(
                 0,

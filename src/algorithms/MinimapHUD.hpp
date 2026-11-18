@@ -1,3 +1,4 @@
+
 #ifndef MINIMAP_HUD_HPP
 #define MINIMAP_HUD_HPP
 
@@ -30,7 +31,10 @@ public:
         const cp1::Grid& grid,
         bool upload = false,
         bool isSprinting = false,
-        bool isCrouching = false
+        bool isCrouching = false,
+        float monsterX = 0.0f,
+        float monsterZ = 0.0f,
+        bool monsterChasing = false
     ) {
         canvas.clear(rgba(20, 24, 29, 230));
 
@@ -181,7 +185,25 @@ public:
             rgba(0, 255, 204)
         );
 
-        // 5) Midpoint circle — pulsing radar echo and player indicator.
+        // 5) Monster indicator — red marker visible during CHASE.
+        if (monsterChasing) {
+
+            float mapMonsterX =
+                (monsterX + mapCols * 0.5f) * tileW;
+
+            float mapMonsterY =
+                (monsterZ + mapRows * 0.5f) * tileH;
+
+            CircleDrawing::drawFilledCircle(
+                canvas,
+                static_cast<int>(mapMonsterX),
+                static_cast<int>(mapMonsterY),
+                5,
+                rgba(255, 30, 30)
+            );
+        }
+
+        // 6) Midpoint circle — pulsing radar echo and player indicator.
         int pulseRadius =
             static_cast<int>(std::fmod(timeSeconds * 20.0f, 25.0f)) + 4;
 
@@ -201,7 +223,7 @@ public:
             rgba(0, 255, 136)
         );
 
-        // 6) Outer HUD border.
+        // 7) Outer HUD border.
         Polygon2D borderPoly({
             { 0, 0 },
             { static_cast<float>(canvas.width - 1), 0 },
